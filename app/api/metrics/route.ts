@@ -6,62 +6,47 @@ export async function GET() {
   try {
     const sb = createServerSupabaseClient();
 
-    // Run all queries in parallel for speed
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
+    const sevenDaysAgo = new Date(Date.now() - 6 * 86400000);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const sevenDaysISO = sevenDaysAgo.toISOString();
+
+    // ── Run all queries in parallel ──────────────────────────────────────────
     const [
-      activeStudentsRes,
-      totalQuestionsRes,
-      avgTimeRes,
-      topChaptersRes,
-      correctRateRes,
-      weeklyActivityRes,
-      streakStatsRes,
-      recentUsersRes,
+      activityTodayRes,       // user_activity rows today (user_id, chapter, subject, time, is_correct)
+      weeklyActivityRes,      // user_activity last 7 days (answered_at, user_id)
+      attemptsTodayRes,       // attempts today (student_id, time_taken_sec, correct)
+      streakStatsRes,         // user_streaks (current_streak, longest_streak)
+      recentSessionsRes,      // user_recent_session (user_id, chapter_title, subject_name, updated_at)
     ] = await Promise.all([
-      // 1. Distinct students who solved questions today
+      // Today's activity — fetch up to 5000 rows to handle busy days
       sb
         .from("user_activity")
-        .select("user_id", { count: "exact", head: false })
-        .gte("answered_at", new Date().toISOString().slice(0, 10))
-        .not("user_id", "is", null),
+        .select("user_id, chapter_title, subject_name, time_spent_seconds, is_correct, answered_at")
+        .gte("answered_at", todayISO)
+        .limit(5000),
 
-      // 2. Total questions solved today
-      sb
-        .from("user_activity")
-        .select("id", { count: "exact", head: true })
-        .gte("answered_at", new Date().toISOString().slice(0, 10)),
-
-      // 3. Average time per question today (seconds)
-      sb
-        .from("user_activity")
-        .select("time_spent_seconds")
-        .gte("answered_at", new Date().toISOString().slice(0, 10))
-        .not("time_spent_seconds", "is", null),
-
-      // 4. Top chapters today
-      sb
-        .from("user_activity")
-        .select("chapter_title, subject_name")
-        .gte("answered_at", new Date().toISOString().slice(0, 10)),
-
-      // 5. Correct vs incorrect today (for accuracy rate)
-      sb
-        .from("user_activity")
-        .select("is_correct")
-        .gte("answered_at", new Date().toISOString().slice(0, 10)),
-
-      // 6. Daily activity for the last 7 days (for sparkline)
+      // Last 7 days — for sparkline + retention
       sb
         .from("user_activity")
         .select("answered_at, user_id")
-        .gte(
-          "answered_at",
-          new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
-        ),
+        .gte("answered_at", sevenDaysISO)
+        .limit(10000),
 
-      // 7. Streak stats — avg / max current streak
+      // attempts table — for avg time_taken_sec and accuracy cross-check
+      sb
+        .from("attempts")
+        .select("student_id, time_taken_sec, correct")
+        .gte("created_at", todayISO)
+        .limit(5000),
+
+      // Streak stats
       sb.from("user_streaks").select("current_streak, longest_streak"),
 
-      // 8. Recent active users with their last session
+      // Most recently active users (from user_recent_session)
       sb
         .from("user_recent_session")
         .select("user_id, chapter_title, subject_name, updated_at")
@@ -69,60 +54,83 @@ export async function GET() {
         .limit(10),
     ]);
 
-    // ── derive distinct active students today ──
+    // ── Collect per-query errors for the error banner ────────────────────────
+    const queryErrors: Record<string, string> = {};
+    if (activityTodayRes.error)   queryErrors.activityToday   = activityTodayRes.error.message;
+    if (weeklyActivityRes.error)  queryErrors.weeklyActivity  = weeklyActivityRes.error.message;
+    if (attemptsTodayRes.error)   queryErrors.attemptsToday   = attemptsTodayRes.error.message;
+    if (streakStatsRes.error)     queryErrors.streakStats     = streakStatsRes.error.message;
+    if (recentSessionsRes.error)  queryErrors.recentSessions  = recentSessionsRes.error.message;
+
+    const activityRows    = activityTodayRes.data   ?? [];
+    const weeklyRows      = weeklyActivityRes.data  ?? [];
+    const attemptsRows    = attemptsTodayRes.data   ?? [];
+    const streakRows      = streakStatsRes.data     ?? [];
+    const recentRows      = recentSessionsRes.data  ?? [];
+
+    // ── 1. Active students today (distinct user_id in user_activity) ─────────
     const activeStudentIds = new Set(
-      (activeStudentsRes.data ?? []).map((r: { user_id: string }) => r.user_id)
+      activityRows
+        .map((r) => r.user_id as string | null)
+        .filter(Boolean)
     );
     const activeStudentsToday = activeStudentIds.size;
 
-    // ── total questions ──
-    const totalQuestionsToday = totalQuestionsRes.count ?? 0;
+    // ── 2. Total questions solved today ──────────────────────────────────────
+    const totalQuestionsToday = activityRows.length;
 
-    // ── avg time ──
-    const times = (avgTimeRes.data ?? [])
-      .map((r: { time_spent_seconds: number }) => r.time_spent_seconds)
-      .filter((t: number) => t > 0);
+    // ── 3. Avg time per question — prefer user_activity, fall back to attempts
+    //       user_activity.time_spent_seconds is per question-answer event
+    //       attempts.time_taken_sec is the raw attempt timer
+    const uaTimes = activityRows
+      .map((r) => r.time_spent_seconds as number | null)
+      .filter((t): t is number => typeof t === "number" && t > 0);
+
+    const attTimes = attemptsRows
+      .map((r) => r.time_taken_sec as number | null)
+      .filter((t): t is number => typeof t === "number" && t > 0);
+
+    const timeSamples = uaTimes.length > 0 ? uaTimes : attTimes;
     const avgTimeSec =
-      times.length > 0
-        ? Math.round(times.reduce((a: number, b: number) => a + b, 0) / times.length)
+      timeSamples.length > 0
+        ? Math.round(timeSamples.reduce((a, b) => a + b, 0) / timeSamples.length)
         : 0;
 
-    // ── top chapters ──
-    const chapterMap: Record<string, { count: number; subject: string }> = {};
-    (topChaptersRes.data ?? []).forEach(
-      (r: { chapter_title: string; subject_name: string | null }) => {
-        const key = r.chapter_title;
-        if (!chapterMap[key]) {
-          chapterMap[key] = { count: 0, subject: r.subject_name ?? "General" };
-        }
-        chapterMap[key].count++;
-      }
-    );
-    const topChapters = Object.entries(chapterMap)
-      .map(([title, { count, subject }]) => ({ title, count, subject }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // ── accuracy rate ──
-    const correctData = correctRateRes.data ?? [];
-    const totalAnswered = correctData.length;
-    const totalCorrect = correctData.filter(
-      (r: { is_correct: boolean | null }) => r.is_correct === true
+    // ── 4. Accuracy rate today ────────────────────────────────────────────────
+    // Prefer user_activity.is_correct; fall back to attempts.correct
+    const correctSamples =
+      activityRows.length > 0 ? activityRows : attemptsRows;
+    const correctField  = activityRows.length > 0 ? "is_correct" : "correct";
+    const totalAnswered = correctSamples.length;
+    const totalCorrect  = correctSamples.filter(
+      (r) => (r as Record<string, unknown>)[correctField] === true
     ).length;
     const accuracyRate =
       totalAnswered > 0
         ? Math.round((totalCorrect / totalAnswered) * 100)
         : 0;
 
-    // ── 7-day activity sparkline ──
-    const dayBuckets: Record<string, Set<string>> = {};
-    (weeklyActivityRes.data ?? []).forEach(
-      (r: { answered_at: string; user_id: string }) => {
-        const day = r.answered_at.slice(0, 10);
-        if (!dayBuckets[day]) dayBuckets[day] = new Set();
-        if (r.user_id) dayBuckets[day].add(r.user_id);
+    // ── 5. Top chapters today ─────────────────────────────────────────────────
+    const chapterMap: Record<string, { count: number; subject: string }> = {};
+    activityRows.forEach((r) => {
+      const key = r.chapter_title as string;
+      if (!chapterMap[key]) {
+        chapterMap[key] = { count: 0, subject: (r.subject_name as string) ?? "General" };
       }
-    );
+      chapterMap[key].count++;
+    });
+    const topChapters = Object.entries(chapterMap)
+      .map(([title, { count, subject }]) => ({ title, count, subject }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // ── 6. 7-day sparkline — unique users per day ─────────────────────────────
+    const dayBuckets: Record<string, Set<string>> = {};
+    weeklyRows.forEach((r) => {
+      const day = (r.answered_at as string).slice(0, 10);
+      if (!dayBuckets[day]) dayBuckets[day] = new Set();
+      if (r.user_id) dayBuckets[day].add(r.user_id as string);
+    });
     const weeklyActivity = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(Date.now() - (6 - i) * 86400000);
       const key = d.toISOString().slice(0, 10);
@@ -133,63 +141,49 @@ export async function GET() {
       };
     });
 
-    // ── streak stats ──
-    const streaks = streakStatsRes.data ?? [];
+    // ── 7. Retention: users active yesterday who came back today ─────────────
+    const todayStr     = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+    const todaySet = new Set(
+      weeklyRows
+        .filter((r) => (r.answered_at as string).slice(0, 10) === todayStr)
+        .map((r) => r.user_id as string)
+        .filter(Boolean)
+    );
+    const yesterdaySet = new Set(
+      weeklyRows
+        .filter((r) => (r.answered_at as string).slice(0, 10) === yesterdayStr)
+        .map((r) => r.user_id as string)
+        .filter(Boolean)
+    );
+    const retainedCount = [...yesterdaySet].filter((uid) => todaySet.has(uid)).length;
+    const retention =
+      yesterdaySet.size > 0
+        ? Math.round((retainedCount / yesterdaySet.size) * 100)
+        : 0;
+
+    // ── 8. Streak stats ───────────────────────────────────────────────────────
     const avgStreak =
-      streaks.length > 0
+      streakRows.length > 0
         ? Math.round(
-            streaks.reduce(
-              (s: number, r: { current_streak: number }) => s + r.current_streak,
-              0
-            ) / streaks.length
+            streakRows.reduce((s, r) => s + ((r.current_streak as number) ?? 0), 0) /
+              streakRows.length
           )
         : 0;
     const maxStreak =
-      streaks.length > 0
-        ? Math.max(
-            ...streaks.map((r: { longest_streak: number }) => r.longest_streak)
-          )
+      streakRows.length > 0
+        ? Math.max(...streakRows.map((r) => (r.longest_streak as number) ?? 0))
         : 0;
 
-    // ── retention: % of users who were active yesterday AND today ──
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const yesterdayStr = new Date(Date.now() - 86400000)
-      .toISOString()
-      .slice(0, 10);
-
-    const todayUsers = new Set(
-      (weeklyActivityRes.data ?? [])
-        .filter((r: { answered_at: string }) => r.answered_at.slice(0, 10) === todayStr)
-        .map((r: { user_id: string }) => r.user_id)
-    );
-    const yesterdayUsers = new Set(
-      (weeklyActivityRes.data ?? [])
-        .filter((r: { answered_at: string }) => r.answered_at.slice(0, 10) === yesterdayStr)
-        .map((r: { user_id: string }) => r.user_id)
-    );
-    const retainedUsers = [...yesterdayUsers].filter((uid) =>
-      todayUsers.has(uid)
-    ).length;
-    const retention =
-      yesterdayUsers.size > 0
-        ? Math.round((retainedUsers / yesterdayUsers.size) * 100)
-        : 0;
-
-    // ── recent users ──
-    const recentUsers = (recentUsersRes.data ?? []).map(
-      (r: {
-        user_id: string;
-        chapter_title: string;
-        subject_name: string | null;
-        updated_at: string;
-      }) => ({
-        userId: r.user_id,
-        shortId: r.user_id.slice(0, 8),
-        chapter: r.chapter_title,
-        subject: r.subject_name ?? "—",
-        lastSeen: r.updated_at,
-      })
-    );
+    // ── 9. Recent users (from user_recent_session) ────────────────────────────
+    const recentUsers = recentRows.map((r) => ({
+      userId:   r.user_id as string,
+      shortId:  (r.user_id as string).slice(0, 8),
+      chapter:  r.chapter_title as string,
+      subject:  (r.subject_name as string) ?? "—",
+      lastSeen: r.updated_at as string,
+    }));
 
     return Response.json({
       activeStudentsToday,
@@ -202,9 +196,24 @@ export async function GET() {
       topChapters,
       weeklyActivity,
       recentUsers,
+      // Debug: raw counts so you can verify in the browser
+      _debug: {
+        activityRowsToday:    activityRows.length,
+        weeklyRows:           weeklyRows.length,
+        attemptRowsToday:     attemptsRows.length,
+        streakRows:           streakRows.length,
+        recentSessionRows:    recentRows.length,
+        todayUsersCount:      todaySet.size,
+        yesterdayUsersCount:  yesterdaySet.size,
+        retainedCount,
+      },
+      ...(Object.keys(queryErrors).length > 0 ? { queryErrors } : {}),
     });
   } catch (err) {
     console.error("[metrics]", err);
-    return Response.json({ error: "Failed to fetch metrics" }, { status: 500 });
+    return Response.json(
+      { error: String(err), hint: "Check that SUPABASE_SERVICE_ROLE_KEY is set in .env and the dev server was restarted." },
+      { status: 500 }
+    );
   }
 }

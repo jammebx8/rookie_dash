@@ -42,12 +42,15 @@ interface RecentUser {
   lastSeen: string;
 }
 
-interface FirebaseUser {
-  userId: string;
-  displayName: string;
-  email: string;
-  durationSec: number;
-  startedAt: string;
+interface SupabaseVisitor {
+  userId:        string;
+  shortId:       string;
+  totalTimeSec:  number;
+  questionCount: number;
+  firstSeenAt:   string;
+  lastSeenAt:    string;
+  chapter:       string;
+  subject:       string;
 }
 
 interface MetricsData {
@@ -61,13 +64,16 @@ interface MetricsData {
   topChapters: TopChapter[];
   weeklyActivity: WeekDay[];
   recentUsers: RecentUser[];
+  queryErrors?: Record<string, string>;
+  error?: string;
 }
 
 interface VisitorData {
-  totalVisitors: number;
+  totalVisitors:  number;
   avgDurationSec: number;
-  usersToday: FirebaseUser[];
-  error?: string;
+  usersToday:     SupabaseVisitor[];
+  errors?:        Record<string, string>;
+  error?:         string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -423,6 +429,26 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* ── Supabase error banner (only shown when credentials are wrong / missing) ── */}
+        {!loading && metrics?.queryErrors && Object.keys(metrics.queryErrors).length > 0 && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+            <p className="text-sm font-semibold text-red-700 mb-1">Supabase query errors — check your credentials in <code className="font-mono bg-red-100 px-1 rounded">.env</code></p>
+            <ul className="space-y-0.5">
+              {Object.entries(metrics.queryErrors).map(([key, msg]) => (
+                <li key={key} className="text-xs text-red-600 font-mono">
+                  <span className="font-semibold">{key}:</span> {msg}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {!loading && metrics?.error && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+            <p className="text-sm font-semibold text-red-700">API error: {metrics.error}</p>
+            <p className="text-xs text-red-500 mt-1">Make sure <code className="font-mono">SUPABASE_SERVICE_ROLE_KEY</code> is set in your <code className="font-mono">.env</code> file and the dev server was restarted.</p>
+          </div>
+        )}
+
         {/* ── KPI tiles ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-7">
           <StatCard
@@ -485,8 +511,8 @@ export default function DashboardPage() {
             value={loading ? "—" : visitors?.totalVisitors ?? 0}
             sub={
               visitors?.avgDurationSec
-                ? `avg ${fmtSeconds(visitors.avgDurationSec)} on site`
-                : "from Firebase"
+                ? `avg ${fmtSeconds(visitors.avgDurationSec)} on platform`
+                : "from user_activity"
             }
             accent="indigo"
             loading={loading}
@@ -610,7 +636,7 @@ export default function DashboardPage() {
                   <p className="text-2xl font-bold text-slate-700 leading-none">
                     {fmtSeconds(visitors?.avgDurationSec ?? 0)}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">on-site (Firebase)</p>
+                  <p className="text-xs text-slate-400 mt-0.5">total time on platform</p>
                 </div>
               </div>
             )}
@@ -668,14 +694,14 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Today's visitors from Firebase */}
+          {/* Today's visitors from Supabase user_activity */}
           <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
             <div className="px-5 pt-5 pb-3 border-b border-slate-100">
               <div className="flex items-center justify-between">
-                <SectionHeader title="Website Visitors Today" icon={UserCheck} />
+                <SectionHeader title="Users on Platform Today" icon={UserCheck} />
                 {visitors?.error && (
                   <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                    Firebase fallback
+                    Error
                   </span>
                 )}
               </div>
@@ -696,8 +722,10 @@ export default function DashboardPage() {
             ) : (visitors?.usersToday ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <UserCheck size={28} strokeWidth={1.4} />
-                <p className="mt-2 text-sm">No visitor data yet today</p>
-                <p className="text-xs mt-1 text-slate-300">Check your Firebase sessions collection</p>
+                <p className="mt-2 text-sm">No activity recorded today</p>
+                {visitors?.error && (
+                  <p className="text-xs mt-1 text-red-400 font-mono px-4 text-center">{visitors.error}</p>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
@@ -705,18 +733,20 @@ export default function DashboardPage() {
                   <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center shrink-0">
                       <span className="text-white text-[11px] font-bold">
-                        {(u.displayName?.[0] ?? "U").toUpperCase()}
+                        {u.shortId.slice(0, 2).toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
-                        {u.displayName}
+                      <p className="text-sm font-medium text-slate-800 truncate font-mono">
+                        {u.shortId}…
                       </p>
-                      <p className="text-xs text-slate-400">
-                        {fmtTime(u.startedAt)} &middot; {fmtSeconds(u.durationSec)} on site
+                      <p className="text-xs text-slate-400 truncate">
+                        {u.subject} — {u.chapter}
+                        {" "}&middot; {u.questionCount} question{u.questionCount !== 1 ? "s" : ""}
+                        {u.totalTimeSec > 0 && <> &middot; {fmtSeconds(u.totalTimeSec)}</>}
                       </p>
                     </div>
-                    <span className="text-xs text-slate-400 shrink-0">{timeAgo(u.startedAt)}</span>
+                    <span className="text-xs text-slate-400 shrink-0">{timeAgo(u.lastSeenAt)}</span>
                   </div>
                 ))}
               </div>
