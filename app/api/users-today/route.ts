@@ -1,16 +1,5 @@
-/**
- * /api/users-today
- *
- * Returns every distinct user who touched the platform today,
- * built entirely from Supabase tables — no Firebase needed.
- *
- * Sources used:
- *   user_activity      → question-level events (answered_at, time_spent_seconds)
- *   user_recent_session → last known chapter / subject per user
- *   attempts           → raw attempt timer if user_activity time is missing
- */
-
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { getUserProfiles } from "@/lib/getUserProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +11,6 @@ export async function GET() {
     todayStart.setHours(0, 0, 0, 0);
     const todayISO = todayStart.toISOString();
 
-    // Fetch today's activity rows and the last-session snapshot in parallel
     const [activityRes, sessionsRes] = await Promise.all([
       sb
         .from("user_activity")
@@ -37,27 +25,25 @@ export async function GET() {
     ]);
 
     const errors: Record<string, string> = {};
-    if (activityRes.error)  errors.activity  = activityRes.error.message;
-    if (sessionsRes.error)  errors.sessions  = sessionsRes.error.message;
+    if (activityRes.error) errors.activity = activityRes.error.message;
+    if (sessionsRes.error) errors.sessions = sessionsRes.error.message;
 
     const activityRows = activityRes.data ?? [];
     const sessionRows  = sessionsRes.data  ?? [];
 
-    // Build a map of last-session info keyed by user_id
     const sessionMap = new Map(
       sessionRows.map((r) => [r.user_id as string, r])
     );
 
-    // Aggregate per-user: total time on platform today + last seen timestamp
+    // Aggregate per-user totals
     type UserAgg = {
-      userId:       string;
-      shortId:      string;
-      totalTimeSec: number;
+      userId:        string;
+      totalTimeSec:  number;
       questionCount: number;
-      firstSeenAt:  string;
-      lastSeenAt:   string;
-      chapter:      string;
-      subject:      string;
+      firstSeenAt:   string;
+      lastSeenAt:    string;
+      chapter:       string;
+      subject:       string;
     };
 
     const userMap = new Map<string, UserAgg>();
@@ -73,7 +59,6 @@ export async function GET() {
       if (!userMap.has(uid)) {
         userMap.set(uid, {
           userId:        uid,
-          shortId:       uid.slice(0, 8),
           totalTimeSec:  timeSec,
           questionCount: 1,
           firstSeenAt:   answeredAt,
@@ -85,18 +70,34 @@ export async function GET() {
         const agg = userMap.get(uid)!;
         agg.totalTimeSec  += timeSec;
         agg.questionCount += 1;
-        // answered_at rows come desc, so first row is latest — keep track of earliest too
         if (answeredAt < agg.firstSeenAt) agg.firstSeenAt = answeredAt;
       }
     });
 
-    const usersToday = Array.from(userMap.values()).sort(
+    const rawUsers = Array.from(userMap.values()).sort(
       (a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime()
     );
 
-    const totalVisitors = usersToday.length;
+    // ── Enrich with auth.users profiles ──────────────────────────────────────
+    const profileMap = await getUserProfiles(rawUsers.map((u) => u.userId));
 
-    // Average total time on platform per user today
+    const usersToday = rawUsers.map((u) => {
+      const profile = profileMap.get(u.userId);
+      return {
+        userId:        u.userId,
+        name:          profile?.name      ?? u.userId.slice(0, 8),
+        email:         profile?.email     ?? "",
+        avatarUrl:     profile?.avatarUrl ?? "",
+        totalTimeSec:  u.totalTimeSec,
+        questionCount: u.questionCount,
+        firstSeenAt:   u.firstSeenAt,
+        lastSeenAt:    u.lastSeenAt,
+        chapter:       u.chapter,
+        subject:       u.subject,
+      };
+    });
+
+    const totalVisitors = usersToday.length;
     const avgDurationSec =
       totalVisitors > 0
         ? Math.round(
@@ -118,7 +119,7 @@ export async function GET() {
         avgDurationSec: 0,
         usersToday: [],
         error: String(err),
-        hint: "Check that SUPABASE_SERVICE_ROLE_KEY is set in .env and the dev server was restarted.",
+        hint: "Check SUPABASE_SERVICE_ROLE_KEY in .env and restart the dev server.",
       },
       { status: 200 }
     );

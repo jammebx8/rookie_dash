@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { getUserProfiles } from "@/lib/getUserProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -14,39 +15,34 @@ export async function GET() {
     sevenDaysAgo.setHours(0, 0, 0, 0);
     const sevenDaysISO = sevenDaysAgo.toISOString();
 
-    // ── Run all queries in parallel ──────────────────────────────────────────
+    // ── Run all Supabase table queries in parallel ────────────────────────────
     const [
-      activityTodayRes,       // user_activity rows today (user_id, chapter, subject, time, is_correct)
-      weeklyActivityRes,      // user_activity last 7 days (answered_at, user_id)
-      attemptsTodayRes,       // attempts today (student_id, time_taken_sec, correct)
-      streakStatsRes,         // user_streaks (current_streak, longest_streak)
-      recentSessionsRes,      // user_recent_session (user_id, chapter_title, subject_name, updated_at)
+      activityTodayRes,
+      weeklyActivityRes,
+      attemptsTodayRes,
+      streakStatsRes,
+      recentSessionsRes,
     ] = await Promise.all([
-      // Today's activity — fetch up to 5000 rows to handle busy days
       sb
         .from("user_activity")
         .select("user_id, chapter_title, subject_name, time_spent_seconds, is_correct, answered_at")
         .gte("answered_at", todayISO)
         .limit(5000),
 
-      // Last 7 days — for sparkline + retention
       sb
         .from("user_activity")
         .select("answered_at, user_id")
         .gte("answered_at", sevenDaysISO)
         .limit(10000),
 
-      // attempts table — for avg time_taken_sec and accuracy cross-check
       sb
         .from("attempts")
         .select("student_id, time_taken_sec, correct")
         .gte("created_at", todayISO)
         .limit(5000),
 
-      // Streak stats
       sb.from("user_streaks").select("current_streak, longest_streak"),
 
-      // Most recently active users (from user_recent_session)
       sb
         .from("user_recent_session")
         .select("user_id, chapter_title, subject_name, updated_at")
@@ -54,42 +50,42 @@ export async function GET() {
         .limit(10),
     ]);
 
-    // ── Collect per-query errors for the error banner ────────────────────────
+    // ── Per-query error surface ───────────────────────────────────────────────
     const queryErrors: Record<string, string> = {};
-    if (activityTodayRes.error)   queryErrors.activityToday   = activityTodayRes.error.message;
-    if (weeklyActivityRes.error)  queryErrors.weeklyActivity  = weeklyActivityRes.error.message;
-    if (attemptsTodayRes.error)   queryErrors.attemptsToday   = attemptsTodayRes.error.message;
-    if (streakStatsRes.error)     queryErrors.streakStats     = streakStatsRes.error.message;
-    if (recentSessionsRes.error)  queryErrors.recentSessions  = recentSessionsRes.error.message;
+    if (activityTodayRes.error)  queryErrors.activityToday  = activityTodayRes.error.message;
+    if (weeklyActivityRes.error) queryErrors.weeklyActivity = weeklyActivityRes.error.message;
+    if (attemptsTodayRes.error)  queryErrors.attemptsToday  = attemptsTodayRes.error.message;
+    if (streakStatsRes.error)    queryErrors.streakStats    = streakStatsRes.error.message;
+    if (recentSessionsRes.error) queryErrors.recentSessions = recentSessionsRes.error.message;
 
-    const activityRows    = activityTodayRes.data   ?? [];
-    const weeklyRows      = weeklyActivityRes.data  ?? [];
-    const attemptsRows    = attemptsTodayRes.data   ?? [];
-    const streakRows      = streakStatsRes.data     ?? [];
-    const recentRows      = recentSessionsRes.data  ?? [];
+    const activityRows = activityTodayRes.data  ?? [];
+    const weeklyRows   = weeklyActivityRes.data ?? [];
+    const attemptsRows = attemptsTodayRes.data  ?? [];
+    const streakRows   = streakStatsRes.data    ?? [];
+    const recentRows   = recentSessionsRes.data ?? [];
 
-    // ── 1. Active students today (distinct user_id in user_activity) ─────────
+    // ── Fetch auth profiles for recent-session users ──────────────────────────
+    const recentUserIds = recentRows
+      .map((r) => r.user_id as string)
+      .filter(Boolean);
+    const profileMap = await getUserProfiles(recentUserIds);
+
+    // ── 1. Active students today ──────────────────────────────────────────────
     const activeStudentIds = new Set(
-      activityRows
-        .map((r) => r.user_id as string | null)
-        .filter(Boolean)
+      activityRows.map((r) => r.user_id as string | null).filter(Boolean)
     );
     const activeStudentsToday = activeStudentIds.size;
 
-    // ── 2. Total questions solved today ──────────────────────────────────────
+    // ── 2. Total questions solved today ───────────────────────────────────────
     const totalQuestionsToday = activityRows.length;
 
-    // ── 3. Avg time per question — prefer user_activity, fall back to attempts
-    //       user_activity.time_spent_seconds is per question-answer event
-    //       attempts.time_taken_sec is the raw attempt timer
+    // ── 3. Avg time per question ──────────────────────────────────────────────
     const uaTimes = activityRows
       .map((r) => r.time_spent_seconds as number | null)
       .filter((t): t is number => typeof t === "number" && t > 0);
-
     const attTimes = attemptsRows
       .map((r) => r.time_taken_sec as number | null)
       .filter((t): t is number => typeof t === "number" && t > 0);
-
     const timeSamples = uaTimes.length > 0 ? uaTimes : attTimes;
     const avgTimeSec =
       timeSamples.length > 0
@@ -97,12 +93,10 @@ export async function GET() {
         : 0;
 
     // ── 4. Accuracy rate today ────────────────────────────────────────────────
-    // Prefer user_activity.is_correct; fall back to attempts.correct
-    const correctSamples =
-      activityRows.length > 0 ? activityRows : attemptsRows;
-    const correctField  = activityRows.length > 0 ? "is_correct" : "correct";
-    const totalAnswered = correctSamples.length;
-    const totalCorrect  = correctSamples.filter(
+    const correctSamples = activityRows.length > 0 ? activityRows : attemptsRows;
+    const correctField   = activityRows.length > 0 ? "is_correct" : "correct";
+    const totalAnswered  = correctSamples.length;
+    const totalCorrect   = correctSamples.filter(
       (r) => (r as Record<string, unknown>)[correctField] === true
     ).length;
     const accuracyRate =
@@ -124,7 +118,7 @@ export async function GET() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // ── 6. 7-day sparkline — unique users per day ─────────────────────────────
+    // ── 6. 7-day sparkline ────────────────────────────────────────────────────
     const dayBuckets: Record<string, Set<string>> = {};
     weeklyRows.forEach((r) => {
       const day = (r.answered_at as string).slice(0, 10);
@@ -132,19 +126,18 @@ export async function GET() {
       if (r.user_id) dayBuckets[day].add(r.user_id as string);
     });
     const weeklyActivity = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(Date.now() - (6 - i) * 86400000);
+      const d   = new Date(Date.now() - (6 - i) * 86400000);
       const key = d.toISOString().slice(0, 10);
       return {
-        date: key,
+        date:  key,
         label: d.toLocaleDateString("en-IN", { weekday: "short" }),
         users: dayBuckets[key]?.size ?? 0,
       };
     });
 
-    // ── 7. Retention: users active yesterday who came back today ─────────────
+    // ── 7. Retention ──────────────────────────────────────────────────────────
     const todayStr     = new Date().toISOString().slice(0, 10);
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-
     const todaySet = new Set(
       weeklyRows
         .filter((r) => (r.answered_at as string).slice(0, 10) === todayStr)
@@ -176,14 +169,20 @@ export async function GET() {
         ? Math.max(...streakRows.map((r) => (r.longest_streak as number) ?? 0))
         : 0;
 
-    // ── 9. Recent users (from user_recent_session) ────────────────────────────
-    const recentUsers = recentRows.map((r) => ({
-      userId:   r.user_id as string,
-      shortId:  (r.user_id as string).slice(0, 8),
-      chapter:  r.chapter_title as string,
-      subject:  (r.subject_name as string) ?? "—",
-      lastSeen: r.updated_at as string,
-    }));
+    // ── 9. Recent users — enriched with auth profile ──────────────────────────
+    const recentUsers = recentRows.map((r) => {
+      const uid     = r.user_id as string;
+      const profile = profileMap.get(uid);
+      return {
+        userId:    uid,
+        name:      profile?.name      ?? uid.slice(0, 8),
+        email:     profile?.email     ?? "",
+        avatarUrl: profile?.avatarUrl ?? "",
+        chapter:   r.chapter_title as string,
+        subject:   (r.subject_name as string) ?? "—",
+        lastSeen:  r.updated_at as string,
+      };
+    });
 
     return Response.json({
       activeStudentsToday,
@@ -196,15 +195,14 @@ export async function GET() {
       topChapters,
       weeklyActivity,
       recentUsers,
-      // Debug: raw counts so you can verify in the browser
       _debug: {
-        activityRowsToday:    activityRows.length,
-        weeklyRows:           weeklyRows.length,
-        attemptRowsToday:     attemptsRows.length,
-        streakRows:           streakRows.length,
-        recentSessionRows:    recentRows.length,
-        todayUsersCount:      todaySet.size,
-        yesterdayUsersCount:  yesterdaySet.size,
+        activityRowsToday:   activityRows.length,
+        weeklyRows:          weeklyRows.length,
+        attemptRowsToday:    attemptsRows.length,
+        streakRows:          streakRows.length,
+        recentSessionRows:   recentRows.length,
+        todayUsersCount:     todaySet.size,
+        yesterdayUsersCount: yesterdaySet.size,
         retainedCount,
       },
       ...(Object.keys(queryErrors).length > 0 ? { queryErrors } : {}),
@@ -212,7 +210,7 @@ export async function GET() {
   } catch (err) {
     console.error("[metrics]", err);
     return Response.json(
-      { error: String(err), hint: "Check that SUPABASE_SERVICE_ROLE_KEY is set in .env and the dev server was restarted." },
+      { error: String(err), hint: "Check SUPABASE_SERVICE_ROLE_KEY in .env and restart the dev server." },
       { status: 500 }
     );
   }

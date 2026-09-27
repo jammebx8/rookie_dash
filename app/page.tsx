@@ -35,16 +35,20 @@ interface TopChapter {
 }
 
 interface RecentUser {
-  userId: string;
-  shortId: string;
-  chapter: string;
-  subject: string;
-  lastSeen: string;
+  userId:    string;
+  name:      string;
+  email:     string;
+  avatarUrl: string;
+  chapter:   string;
+  subject:   string;
+  lastSeen:  string;
 }
 
 interface SupabaseVisitor {
   userId:        string;
-  shortId:       string;
+  name:          string;
+  email:         string;
+  avatarUrl:     string;
   totalTimeSec:  number;
   questionCount: number;
   firstSeenAt:   string;
@@ -159,6 +163,56 @@ function StatCard({
       </p>
       <p className="mt-1 text-sm font-medium text-slate-500">{label}</p>
       {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── UserAvatar ───────────────────────────────────────────────────────────────
+// Shows OAuth profile photo when available, falls back to colour-coded initials.
+
+function UserAvatar({
+  name,
+  avatarUrl,
+  gradient,
+}: {
+  name:      string;
+  avatarUrl: string;
+  gradient:  "emerald" | "indigo";
+}) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0] ?? "")
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
+
+  const gradientClass =
+    gradient === "emerald"
+      ? "from-emerald-400 to-emerald-600"
+      : "from-indigo-400 to-indigo-600";
+
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt={name}
+        width={36}
+        height={36}
+        className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-slate-200"
+        onError={(e) => {
+          // If the image fails to load, hide it so the parent can show the fallback
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`w-9 h-9 rounded-full bg-gradient-to-br ${gradientClass} flex items-center justify-center shrink-0`}
+    >
+      <span className="text-white text-[11px] font-bold">{initials}</span>
     </div>
   );
 }
@@ -655,7 +709,7 @@ export default function DashboardPage() {
               <div className="divide-y divide-slate-100">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <div className="shimmer w-8 h-8 rounded-full shrink-0" />
+                    <div className="shimmer w-9 h-9 rounded-full shrink-0" />
                     <div className="flex-1 space-y-1.5">
                       <div className="shimmer h-3 w-28 rounded" />
                       <div className="shimmer h-2.5 w-40 rounded" />
@@ -673,17 +727,11 @@ export default function DashboardPage() {
               <div className="divide-y divide-slate-100">
                 {(metrics?.recentUsers ?? []).map((u) => (
                   <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
-                    {/* avatar */}
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shrink-0">
-                      <span className="text-white text-[11px] font-bold">
-                        {u.shortId.slice(0, 2).toUpperCase()}
-                      </span>
-                    </div>
+                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate font-mono">
-                        {u.shortId}…
-                      </p>
-                      <p className="text-xs text-slate-400 truncate">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.email}</p>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">
                         {u.subject} — {u.chapter}
                       </p>
                     </div>
@@ -710,7 +758,7 @@ export default function DashboardPage() {
               <div className="divide-y divide-slate-100">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <div className="shimmer w-8 h-8 rounded-full shrink-0" />
+                    <div className="shimmer w-9 h-9 rounded-full shrink-0" />
                     <div className="flex-1 space-y-1.5">
                       <div className="shimmer h-3 w-32 rounded" />
                       <div className="shimmer h-2.5 w-24 rounded" />
@@ -731,18 +779,13 @@ export default function DashboardPage() {
               <div className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
                 {(visitors?.usersToday ?? []).map((u) => (
                   <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center shrink-0">
-                      <span className="text-white text-[11px] font-bold">
-                        {u.shortId.slice(0, 2).toUpperCase()}
-                      </span>
-                    </div>
+                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate font-mono">
-                        {u.shortId}…
-                      </p>
-                      <p className="text-xs text-slate-400 truncate">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.email}</p>
+                      <p className="text-xs text-slate-400 truncate mt-0.5">
                         {u.subject} — {u.chapter}
-                        {" "}&middot; {u.questionCount} question{u.questionCount !== 1 ? "s" : ""}
+                        {" "}&middot; {u.questionCount} Q
                         {u.totalTimeSec > 0 && <> &middot; {fmtSeconds(u.totalTimeSec)}</>}
                       </p>
                     </div>
