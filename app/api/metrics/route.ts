@@ -115,8 +115,7 @@ export async function GET() {
     });
     const topChapters = Object.entries(chapterMap)
       .map(([title, { count, subject }]) => ({ title, count, subject }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      .sort((a, b) => b.count - a.count);
 
     // ── 6. 7-day sparkline ────────────────────────────────────────────────────
     const dayBuckets: Record<string, Set<string>> = {};
