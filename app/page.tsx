@@ -63,10 +63,13 @@ interface MetricsData {
 }
 
 interface SignupData {
-  totalUsers: number;
+  totalAccounts: number;       // auth.users — everyone who signed up
+  totalStudents: number;       // public.users — completed onboarding
+  conversionRate: number;      // totalStudents / totalAccounts %
   newSignupsToday: number;
   newSignupsThisWeek: number;
   signupTimeseries: { date: string; label: string; count: number }[];
+  studentError?: string;
   error?: string;
 }
 
@@ -547,10 +550,10 @@ export default function DashboardPage() {
               {/* hero summary pills */}
               <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 {[
-                  { label: "total users",   value: loading ? "—" : (signups?.totalUsers    ?? 0).toLocaleString() },
-                  { label: "active today",  value: loading ? "—" : (metrics?.activeStudentsToday ?? 0).toString(), green: true },
-                  { label: "D1 retention",  value: loading ? "—" : `${retention?.rollingDn?.[0] ?? metrics?.retention ?? 0}%` },
-                  { label: "DAU/MAU",       value: loading ? "—" : `${engagement?.stickiness ?? 0}%` },
+                  { label: "total accounts",  value: loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString() },
+                  { label: "students",        value: loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString() },
+                  { label: "active today",    value: loading ? "—" : (engagement?.dau ?? 0).toString(), green: true },
+                  { label: "D1 retention",    value: loading ? "—" : `${retention?.rollingDn?.[0] ?? metrics?.retention ?? 0}%` },
                 ].map(({ label, value, green }) => (
                   <div key={label} className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/[0.08] border border-white/[0.12]">
                     <span className={`text-2xl font-bold leading-none ${green ? "text-emerald-300" : "text-white"}`}>{value}</span>
@@ -597,27 +600,33 @@ export default function DashboardPage() {
         )}
 
         {/* ── Row 1: Core KPI tiles ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard icon={Users}     label="Students today"      value={loading ? "—" : metrics?.activeStudentsToday ?? 0}   sub="solved 1+ question"            accent="green"   trend="up" loading={loading} />
-          <StatCard icon={BookOpen}  label="Questions solved"    value={loading ? "—" : metrics?.totalQuestionsToday ?? 0}   sub="today"                         accent="indigo"            loading={loading} />
-          <StatCard icon={Clock}     label="Avg time / question" value={loading ? "—" : fmtSeconds(metrics?.avgTimeSec ?? 0)} sub="today"                         accent="amber"             loading={loading} />
-          <StatCard icon={Target}    label="Accuracy"            value={loading ? "—" : `${metrics?.accuracyRate ?? 0}%`}    sub="correct answers today"         accent="green"   trend={(metrics?.accuracyRate ?? 0) >= 70 ? "up" : (metrics?.accuracyRate ?? 0) >= 40 ? "flat" : "down"} loading={loading} />
-          <StatCard icon={UserPlus}  label="Total users"         value={loading ? "—" : (signups?.totalUsers ?? 0).toLocaleString()} sub={`+${signups?.newSignupsToday ?? 0} today`} accent="indigo" loading={loading} />
-          <StatCard icon={Flame}     label="Avg streak"          value={loading ? "—" : `${metrics?.avgStreak ?? 0}d`}       sub={`max ${metrics?.maxStreak ?? 0}d ever`} accent="amber" loading={loading} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {/* Accounts & students */}
+          <StatCard icon={Users}     label="Total accounts" value={loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString()} sub="auth.users — all signups"            accent="default"                                        loading={loading} />
+          <StatCard icon={UserCheck} label="Students"       value={loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString()} sub={`${signups?.conversionRate ?? 0}% converted`} accent="indigo"                               loading={loading} />
+          {/* Today activity */}
+          <StatCard icon={Activity}  label="Active today"   value={loading ? "—" : (engagement?.dau ?? 0)}                        sub="attempts + activity + sessions"    accent="green"  trend="up"                              loading={loading} />
+          <StatCard icon={BookOpen}  label="Questions"      value={loading ? "—" : metrics?.totalQuestionsToday ?? 0}              sub="solved today"                      accent="indigo"                                         loading={loading} />
+          {/* Quality */}
+          <StatCard icon={Target}    label="Accuracy"       value={loading ? "—" : `${metrics?.accuracyRate ?? 0}%`}               sub="correct today"                     accent="green"  trend={(metrics?.accuracyRate ?? 0) >= 70 ? "up" : (metrics?.accuracyRate ?? 0) >= 40 ? "flat" : "down"} loading={loading} />
+          <StatCard icon={Clock}     label="Avg time / Q"   value={loading ? "—" : fmtSeconds(metrics?.avgTimeSec ?? 0)}           sub="today"                             accent="amber"                                          loading={loading} />
+          {/* Growth */}
+          <StatCard icon={UserPlus}  label="New today"      value={loading ? "—" : signups?.newSignupsToday ?? 0}                  sub={`${signups?.newSignupsThisWeek ?? 0} this week`} accent="indigo"                           loading={loading} />
+          <StatCard icon={Flame}     label="Avg streak"     value={loading ? "—" : `${metrics?.avgStreak ?? 0}d`}                  sub={`max ${metrics?.maxStreak ?? 0}d`} accent="amber"                                          loading={loading} />
         </div>
 
         {/* ── Row 2: DAU / WAU / MAU + stickiness ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard icon={Activity}   label="DAU"        value={loading ? "—" : (engagement?.dau ?? 0)} sub="today"           accent="green"   loading={loading} />
-          <StatCard icon={BarChart2}  label="WAU"        value={loading ? "—" : (engagement?.wau ?? 0)} sub="last 7 days"     accent="indigo"  loading={loading} />
-          <StatCard icon={TrendingUp} label="MAU"        value={loading ? "—" : (engagement?.mau ?? 0)} sub="last 30 days"    accent="default" loading={loading} />
-          <StatCard icon={Zap}        label="Stickiness" value={loading ? "—" : `${engagement?.stickiness ?? 0}%`} sub="DAU / MAU ratio" accent={(engagement?.stickiness ?? 0) >= 20 ? "green" : "amber"} loading={loading} />
+          <StatCard icon={Activity}   label="DAU"        value={loading ? "—" : (engagement?.dau ?? 0)} sub="active users today"       accent="green"   loading={loading} />
+          <StatCard icon={BarChart2}  label="WAU"        value={loading ? "—" : (engagement?.wau ?? 0)} sub="last 7 days"              accent="indigo"  loading={loading} />
+          <StatCard icon={TrendingUp} label="MAU"        value={loading ? "—" : (engagement?.mau ?? 0)} sub="last 30 days"             accent="default" loading={loading} />
+          <StatCard icon={Zap}        label="Stickiness" value={loading ? "—" : `${engagement?.stickiness ?? 0}%`} sub="DAU / MAU · engagement depth" accent={(engagement?.stickiness ?? 0) >= 20 ? "green" : "amber"} loading={loading} />
         </div>
 
         {/* ── Row 3: DAU chart + signup chart ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-            <SectionHeader title="Daily Active Users — 30 days" icon={Activity} sub="Unique students who answered at least 1 question" />
+            <SectionHeader title="Daily Active Users — 30 days" icon={Activity} sub="Union of user_activity + attempts + sessions" />
             <SparkBar data={engagement?.dauTimeseries ?? []} valueKey="dau" loading={loading} color="emerald" />
             <div className="flex justify-between mt-2">
               <span className="text-[10px] text-slate-400">{engagement?.dauTimeseries?.[0]?.label ?? ""}</span>
@@ -626,7 +635,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-            <SectionHeader title="New Signups — 30 days" icon={UserPlus} sub={`${signups?.newSignupsThisWeek ?? 0} new this week · ${signups?.newSignupsToday ?? 0} today`} />
+            <SectionHeader title="New Signups — 30 days" icon={UserPlus} sub={`${signups?.newSignupsThisWeek ?? 0} this week · ${signups?.newSignupsToday ?? 0} today · ${(signups?.totalAccounts ?? 0).toLocaleString()} total accounts`} />
             <SparkBar data={signups?.signupTimeseries ?? []} valueKey="count" loading={loading} color="indigo" />
             <div className="flex justify-between mt-2">
               <span className="text-[10px] text-slate-400">{signups?.signupTimeseries?.[0]?.label ?? ""}</span>

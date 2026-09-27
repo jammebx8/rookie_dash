@@ -1,6 +1,13 @@
 /**
  * /api/engagement
- * DAU / WAU / MAU computed from user_activity.answered_at
+ *
+ * Definitions (as specified):
+ *   Active Users = users with activity in attempts, user_activity, OR user_recent_session today
+ *   DAU = active users today (above definition)
+ *   WAU = unique active users over last 7 days (same union)
+ *   MAU = unique active users over last 30 days (same union)
+ *
+ * Stickiness = DAU / MAU
  */
 import { createServerSupabaseClient } from "@/lib/supabase";
 
@@ -12,50 +19,84 @@ export async function GET() {
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
+    const sevenDaysAgo = new Date(Date.now() - 6 * 86400000);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const sevenDaysISO = sevenDaysAgo.toISOString();
 
     const thirtyDaysAgo = new Date(Date.now() - 29 * 86400000);
     thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysISO = thirtyDaysAgo.toISOString();
 
-    // Pull 30 days of (user_id, answered_at) — enough for DAU/WAU/MAU
-    const { data, error } = await sb
-      .from("user_activity")
-      .select("user_id, answered_at")
-      .gte("answered_at", thirtyDaysAgo.toISOString())
-      .not("user_id", "is", null)
-      .limit(50000);
+    // Fetch all three activity sources in parallel for last 30 days
+    const [activityRes, attemptsRes, sessionsRes] = await Promise.all([
+      // user_activity — primary engagement signal
+      sb
+        .from("user_activity")
+        .select("user_id, answered_at")
+        .gte("answered_at", thirtyDaysISO)
+        .not("user_id", "is", null)
+        .limit(50000),
 
-    if (error) throw new Error(error.message);
+      // attempts — raw attempt events (student_id, created_at)
+      sb
+        .from("attempts")
+        .select("student_id, created_at")
+        .gte("created_at", thirtyDaysISO)
+        .limit(50000),
 
-    const rows = data ?? [];
+      // user_recent_session — updated_at signals a session event
+      sb
+        .from("user_recent_session")
+        .select("user_id, updated_at")
+        .gte("updated_at", thirtyDaysISO),
+    ]);
 
-    const todayStr = todayStart.toISOString().slice(0, 10);
-    const sevenDaysAgoStr = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+    const errors: Record<string, string> = {};
+    if (activityRes.error)  errors.activity  = activityRes.error.message;
+    if (attemptsRes.error)  errors.attempts  = attemptsRes.error.message;
+    if (sessionsRes.error)  errors.sessions  = sessionsRes.error.message;
 
-    const dauSet  = new Set<string>();
-    const wauSet  = new Set<string>();
-    const mauSet  = new Set<string>();
+    // ── Normalise all sources into { uid, day } tuples ────────────────────────
+    type Event = { uid: string; day: string };
+    const events: Event[] = [];
 
-    rows.forEach((r) => {
-      const uid = r.user_id as string;
-      const day = (r.answered_at as string).slice(0, 10);
-      mauSet.add(uid);
-      if (day >= sevenDaysAgoStr) wauSet.add(uid);
-      if (day === todayStr)       dauSet.add(uid);
+    (activityRes.data ?? []).forEach((r) => {
+      if (r.user_id) events.push({ uid: r.user_id as string, day: (r.answered_at as string).slice(0, 10) });
+    });
+    (attemptsRes.data ?? []).forEach((r) => {
+      if (r.student_id) events.push({ uid: r.student_id as string, day: (r.created_at as string).slice(0, 10) });
+    });
+    (sessionsRes.data ?? []).forEach((r) => {
+      if (r.user_id) events.push({ uid: r.user_id as string, day: (r.updated_at as string).slice(0, 10) });
+    });
+
+    const todayStr       = todayStart.toISOString().slice(0, 10);
+    const sevenDaysStr   = sevenDaysISO.slice(0, 10);
+    const thirtyDaysStr  = thirtyDaysISO.slice(0, 10);
+
+    const dauSet = new Set<string>();
+    const wauSet = new Set<string>();
+    const mauSet = new Set<string>();
+
+    events.forEach(({ uid, day }) => {
+      if (day >= thirtyDaysStr) mauSet.add(uid);
+      if (day >= sevenDaysStr)  wauSet.add(uid);
+      if (day === todayStr)     dauSet.add(uid);
     });
 
     const dau = dauSet.size;
     const wau = wauSet.size;
     const mau = mauSet.size;
-
-    // DAU/MAU ratio (stickiness) as a percentage
     const stickiness = mau > 0 ? Math.round((dau / mau) * 100) : 0;
 
-    // Daily active users for last 30 days (for chart)
+    // ── Per-day DAU timeseries (30 days) ──────────────────────────────────────
+    // Uses union of all three sources — same definition as DAU above
     const dayMap: Record<string, Set<string>> = {};
-    rows.forEach((r) => {
-      const day = (r.answered_at as string).slice(0, 10);
+    events.forEach(({ uid, day }) => {
       if (!dayMap[day]) dayMap[day] = new Set();
-      dayMap[day].add(r.user_id as string);
+      dayMap[day].add(uid);
     });
 
     const dauTimeseries = Array.from({ length: 30 }, (_, i) => {
@@ -68,9 +109,15 @@ export async function GET() {
       };
     });
 
-    return Response.json({ dau, wau, mau, stickiness, dauTimeseries });
+    return Response.json({
+      dau, wau, mau, stickiness,
+      dauTimeseries,
+      ...(Object.keys(errors).length > 0 ? { errors } : {}),
+    });
   } catch (err) {
     console.error("[engagement]", err);
-    return Response.json({ dau: 0, wau: 0, mau: 0, stickiness: 0, dauTimeseries: [], error: String(err) }, { status: 200 });
+    return Response.json({
+      dau: 0, wau: 0, mau: 0, stickiness: 0, dauTimeseries: [], error: String(err),
+    }, { status: 200 });
   }
 }
