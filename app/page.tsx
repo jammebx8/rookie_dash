@@ -485,40 +485,15 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, [fetchAll]);
 
-  const today = new Date().toLocaleDateString("en-IN", {
+  const _today = new Date().toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+  const today = _today;
 
   return (
     <div className="min-h-screen bg-[#f8f9fb]">
 
-      {/* ── Navbar ── */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="7" fill="#10b981" />
-              <path d="M8 20V10l6-3 6 3v10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M11 20v-5h6v5"        stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-bold text-slate-900 text-base tracking-tight">Rookie</span>
-            <span className="hidden sm:inline-block text-xs text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
-              Admin
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block text-xs text-slate-400">{today}</span>
-            <button
-              onClick={() => fetchAll(true)}
-              disabled={refreshing}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-lg transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* header is now rendered by NavBar in layout.tsx */}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
 
@@ -549,6 +524,14 @@ export default function DashboardPage() {
 
               {/* hero summary pills */}
               <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                <button
+                  onClick={() => fetchAll(true)}
+                  disabled={refreshing}
+                  className="flex items-center gap-1.5 text-xs font-medium text-white/50 hover:text-white border border-white/20 px-3 py-1.5 rounded-lg transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+                  Refresh
+                </button>
                 {[
                   { label: "total accounts",  value: loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString() },
                   { label: "students",        value: loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString() },
@@ -890,9 +873,23 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Footer ── */}
-        <footer className="flex items-center justify-between text-xs text-slate-400 pb-2">
+        <footer className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 pb-4 pt-2 border-t border-slate-200">
           <span>Last refreshed: {lastRefresh.toLocaleTimeString("en-IN")}</span>
-          <span>Auto-refreshes every 2 min</span>
+          <div className="flex items-center gap-3">
+            <span>Auto-refreshes every 2 min</span>
+            <a
+              href="/api/export"
+              download="rookie-analytics.csv"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition font-medium"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download CSV
+            </a>
+          </div>
         </footer>
 
       </main>
