@@ -166,6 +166,24 @@ export default function FeaturesPage() {
     .sort((a, b) => b.event_count - a.event_count)
     ?? [];
 
+  // ── Questions attempted per feature ────────────────────────────────────────
+  // This is the key breakdown: of ALL questions attempted, how many came from
+  // each surface (practice / question_viewer / custom_test / similar / recommendation)?
+  const QUESTION_FEATURES: { key: string; label: string; color: string; bar: string }[] = [
+    { key: "practice",        label: "Practice",         color: "text-emerald-700", bar: "bg-emerald-500" },
+    { key: "question_viewer", label: "Question Viewer",  color: "text-indigo-700",  bar: "bg-indigo-500"  },
+    { key: "custom_test",     label: "Custom Tests",     color: "text-violet-700",  bar: "bg-violet-500"  },
+    { key: "similar",         label: "Similar Questions",color: "text-sky-700",     bar: "bg-sky-500"     },
+    { key: "recommendation",  label: "Recommendations",  color: "text-amber-700",   bar: "bg-amber-500"   },
+  ];
+
+  const answeredByFeature: { key: string; label: string; count: number; students: number; color: string; bar: string }[] = QUESTION_FEATURES.map(f => {
+    const row = data?.feature_counts.find(fc => fc.feature === f.key && fc.event_name === "question_answered");
+    return { ...f, count: row?.event_count ?? 0, students: row?.unique_students ?? 0 };
+  });
+
+  const totalAnswered = answeredByFeature.reduce((s, r) => s + r.count, 0);
+
   const FEATURES_ORDER = ["practice", "question_viewer", "custom_test", "recommendation", "similar"];
 
   return (
@@ -196,6 +214,106 @@ export default function FeaturesPage() {
             {data.error}
           </div>
         )}
+
+        {/* ── HERO: Questions Attempted by Feature ── */}
+        {/* The single most important question: of all attempts, which surface drove them? */}
+        <div className={`${CARD} p-5`}>
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <SectionHeader title="Questions Attempted by Feature" icon={Target} />
+              <p className="text-xs text-slate-400 -mt-2">
+                Every <code className="font-mono bg-slate-100 px-1 rounded text-[10px]">question_answered</code> event
+                {" "}tagged by the surface it came from — last 30 days
+              </p>
+            </div>
+            {!loading && (
+              <div className="text-right shrink-0">
+                <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">
+                  {totalAnswered.toLocaleString()}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">total attempts</p>
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <Skeleton rows={5} />
+          ) : totalAnswered === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+              <Target size={28} strokeWidth={1.4} />
+              <p className="text-sm">No question_answered events yet.</p>
+              <p className="text-xs text-center max-w-xs">
+                Run <code className="font-mono bg-slate-100 px-1 rounded">analytics_events_migration.sql</code> in
+                Supabase and use the app — data will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {answeredByFeature
+                .sort((a, b) => b.count - a.count)
+                .map(row => {
+                  const pct = totalAnswered > 0 ? Math.round((row.count / totalAnswered) * 100) : 0;
+                  return (
+                    <div key={row.key}>
+                      <div className="flex items-center justify-between mb-1.5 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {/* Colour dot */}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${row.bar}`} />
+                          <span className="font-medium text-slate-800">{row.label}</span>
+                          <span className="text-xs text-slate-400">
+                            {row.students.toLocaleString()} student{row.students !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-semibold text-slate-500 w-8 text-right tabular-nums">{pct}%</span>
+                          <span className="text-sm font-bold text-slate-900 tabular-nums w-16 text-right">
+                            {row.count.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${row.bar}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {/* Stacked visual bar */}
+          {!loading && totalAnswered > 0 && (
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <p className="text-[10px] text-slate-400 mb-2 uppercase tracking-wide font-medium">Distribution</p>
+              <div className="flex h-3 rounded-full overflow-hidden gap-px">
+                {answeredByFeature
+                  .filter(r => r.count > 0)
+                  .sort((a, b) => b.count - a.count)
+                  .map(row => {
+                    const pct = Math.max((row.count / totalAnswered) * 100, 1);
+                    return (
+                      <div
+                        key={row.key}
+                        className={`${row.bar} first:rounded-l-full last:rounded-r-full transition-all`}
+                        style={{ width: `${pct}%` }}
+                        title={`${row.label}: ${row.count.toLocaleString()} (${Math.round(pct)}%)`}
+                      />
+                    );
+                  })}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                {answeredByFeature.filter(r => r.count > 0).sort((a, b) => b.count - a.count).map(row => (
+                  <div key={row.key} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                    <span className={`w-2 h-2 rounded-full ${row.bar}`} />
+                    {row.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Row 1: Feature cards ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
