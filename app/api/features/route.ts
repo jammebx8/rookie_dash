@@ -60,6 +60,57 @@ export interface FeaturesData {
   error?:            string;
 }
 
+async function fetchAllAnalyticsEvents(
+  sb: ReturnType<typeof createServerSupabaseClient>,
+  iso30: string
+): Promise<Record<string, unknown>[]> {
+  const PAGE_SIZE = 1000;
+
+  // 1. Fetch first batch and exact total count
+  const firstRes = await sb
+    .from("analytics_events")
+    .select(
+      "student_id, session_id, event_name, feature, subject, chapter, duration_ms, ts, question_id",
+      { count: "exact" }
+    )
+    .gte("ts", iso30)
+    .order("ts", { ascending: false })
+    .range(0, PAGE_SIZE - 1);
+
+  if (firstRes.error) {
+    console.error("[features] Error fetching analytics_events first page:", firstRes.error);
+    return [];
+  }
+
+  const allEvents = [...(firstRes.data ?? [])] as Record<string, unknown>[];
+  const total = firstRes.count ?? allEvents.length;
+
+  // 2. Fetch remaining pages in parallel if total exceeds PAGE_SIZE
+  if (total > PAGE_SIZE) {
+    const promises = [];
+    const MAX_EVENTS = 50_000;
+    for (let from = PAGE_SIZE; from < total && from < MAX_EVENTS; from += PAGE_SIZE) {
+      promises.push(
+        sb
+          .from("analytics_events")
+          .select("student_id, session_id, event_name, feature, subject, chapter, duration_ms, ts, question_id")
+          .gte("ts", iso30)
+          .order("ts", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1)
+      );
+    }
+
+    const results = await Promise.all(promises);
+    for (const r of results) {
+      if (r.data) {
+        allEvents.push(...(r.data as Record<string, unknown>[]));
+      }
+    }
+  }
+
+  return allEvents;
+}
+
 export async function GET() {
   try {
     const sb = createServerSupabaseClient();
@@ -69,14 +120,9 @@ export async function GET() {
     const iso30 = thirtyDaysAgo.toISOString();
 
     // ── Fetch everything in parallel ─────────────────────────────────────────
-    const [eventsRes, solutionRes, testRes, chapterRes] = await Promise.all([
-
-      // All events in the last 30 days (for counts + funnel + activation)
-      sb
-        .from("analytics_events")
-        .select("student_id, session_id, event_name, feature, subject, chapter, duration_ms, ts, question_id")
-        .gte("ts", iso30)
-        .limit(200_000),
+    const [allEvents, solutionRes, testRes] = await Promise.all([
+      // All events in the last 30 days paginated (for counts + funnel + activation + chapters)
+      fetchAllAnalyticsEvents(sb, iso30),
 
       // Solution read events with duration
       sb
@@ -84,29 +130,20 @@ export async function GET() {
         .select("feature, duration_ms")
         .eq("event_name", "solution_read")
         .not("duration_ms", "is", null)
-        .limit(50_000),
+        .order("ts", { ascending: false })
+        .limit(10_000),
 
       // Test lifecycle events
       sb
         .from("analytics_events")
         .select("event_name, student_id, test_id")
         .in("event_name", ["test_created", "test_started", "test_completed", "test_abandoned"])
-        .limit(50_000),
-
-      // Question opened/answered events for chapter breakdown
-      sb
-        .from("analytics_events")
-        .select("chapter, subject, event_name")
-        .in("event_name", ["question_opened", "question_answered"])
-        .not("chapter", "is", null)
-        .gte("ts", iso30)
-        .limit(100_000),
+        .order("ts", { ascending: false })
+        .limit(10_000),
     ]);
 
-    const allEvents   = (eventsRes.data    ?? []) as Record<string, unknown>[];
     const solEvents   = (solutionRes.data  ?? []) as Record<string, unknown>[];
     const testEvents  = (testRes.data      ?? []) as Record<string, unknown>[];
-    const chapEvents  = (chapterRes.data   ?? []) as Record<string, unknown>[];
 
     // ── 1. Feature × event counts ─────────────────────────────────────────────
     type CountKey = string; // `${feature}::${event_name}`
@@ -257,7 +294,10 @@ export async function GET() {
 
     // ── 6. Top chapters ───────────────────────────────────────────────────────
     const chapMap = new Map<string, { chapter: string; subject: string; opens: number }>();
-    for (const e of chapEvents) {
+    for (const e of allEvents) {
+      const evt = e.event_name as string;
+      if (evt !== "question_opened" && evt !== "question_answered") continue;
+      if (!e.chapter) continue;
       const ch  = e.chapter as string;
       const sub = (e.subject as string | null) ?? "";
       const key = `${sub}::${ch}`;
