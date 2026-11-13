@@ -193,6 +193,22 @@ export default function GrantPassPage() {
 
       setActionSuccess(data.message);
 
+      // Broadcast update across open tabs and app
+      try {
+        const bc = new BroadcastChannel("rookie_pass_sync");
+        bc.postMessage({
+          type: "ROOKIE_PASS_CHANGED",
+          action: "grant",
+          userId: data.user?.id,
+          email: data.user?.email,
+          timestamp: Date.now(),
+        });
+        bc.close();
+      } catch {}
+      try {
+        localStorage.setItem("rookie_pass_sync_ts", String(Date.now()));
+      } catch {}
+
       // Refresh table and user status
       setLoadingList(true);
       fetchPassHolders();
@@ -243,6 +259,23 @@ export default function GrantPassPage() {
       }
 
       setActionSuccess(data.message);
+
+      // Broadcast update across open tabs and app
+      try {
+        const bc = new BroadcastChannel("rookie_pass_sync");
+        bc.postMessage({
+          type: "ROOKIE_PASS_CHANGED",
+          action: "revoke",
+          userId: data.user?.id,
+          email: data.user?.email,
+          timestamp: Date.now(),
+        });
+        bc.close();
+      } catch {}
+      try {
+        localStorage.setItem("rookie_pass_sync_ts", String(Date.now()));
+      } catch {}
+
       setLookedUpUser(null);
       setUserHasActivePass(false);
       setLoadingList(true);
