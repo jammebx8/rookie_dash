@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   DollarSign, TrendingUp, Users, CreditCard,
   BarChart2, RefreshCw, ArrowUpRight, ArrowDownRight,
-  Minus, ShoppingCart, CheckCircle, MousePointerClick,
+  Minus, ShoppingCart, CheckCircle, MousePointerClick, Crown,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -219,6 +220,13 @@ export default function RevenuePage() {
             <span className="text-xs text-slate-400">
               Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
             </span>
+            <Link
+              href="/grant-pass"
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition"
+            >
+              <Crown size={13} className="text-amber-500 fill-amber-500" />
+              Grant Pass
+            </Link>
             <button
               onClick={() => fetchData(true)}
               disabled={refreshing}

@@ -6,12 +6,14 @@ import {
   LayoutDashboard,
   Zap,
   DollarSign,
+  ShieldCheck,
 } from "lucide-react";
 
 const TABS = [
   { href: "/",        label: "Dashboard", icon: LayoutDashboard },
   { href: "/features", label: "Features",  icon: Zap            },
   { href: "/revenue",  label: "Revenue",   icon: DollarSign     },
+  { href: "/grant-pass", label: "Grant Pass", icon: ShieldCheck },
 ] as const;
 
 export function NavBar() {
