@@ -1,18 +1,19 @@
 /**
  * /api/features
  *
- * Queries public.analytics_events to answer every question shown on the
- * Features tab:
+ * Supports:
+ *   ?segment=all | free | paid (default: all)
  *
- *   feature_counts    — unique students + event count per (feature, event)
- *   solution_read     — avg / p50 / p90 duration_ms on 'solution_read' events
- *   test_funnel       — created → started → completed vs abandoned
- *   activation_funnel — "have they hit the activation threshold in session 1?"
- *     We define activation candidates as students whose EARLIEST session_id
- *     saw ≥ 3 answered events AND ≥ 1 correct event.
- *   daily_events      — 30-day sparkline of total events per day
- *   top_chapters      — chapters most opened in question_viewer / practice
+ * Queries public.analytics_events to answer:
+ *   feature_counts        — unique students + event count per (feature, event)
+ *   repeat_feature_usage  — which features are used repeatedly (2+ days)
+ *   solution_read         — avg / p50 / p90 duration_ms on 'solution_read' events
+ *   test_funnel           — created → started → completed vs abandoned
+ *   activation_funnel     — hit threshold in session 1
+ *   daily_events          — 30-day sparkline of total events per day
+ *   top_chapters          — chapters most opened in question_viewer / practice
  */
+import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,15 @@ interface FeatureCount {
   event_name:      string;
   event_count:     number;
   unique_students: number;
+}
+
+interface RepeatFeatureUsage {
+  feature:          string;
+  totalStudents:    number;
+  repeatStudents:   number;   // used on 2+ days
+  repeatRate:       number;   // %
+  totalEvents:      number;
+  avgEventsPerUser: number;
 }
 
 interface SolutionStat {
@@ -51,13 +61,15 @@ interface ActivationData {
 }
 
 export interface FeaturesData {
-  feature_counts:    FeatureCount[];
-  solution_stats:    SolutionStat[];
-  test_funnel:       TestFunnel;
-  activation:        ActivationData;
-  daily_events:      { date: string; label: string; count: number }[];
-  top_chapters:      { chapter: string; subject: string; opens: number }[];
-  error?:            string;
+  segment:               string;
+  feature_counts:        FeatureCount[];
+  repeat_feature_usage:  RepeatFeatureUsage[];
+  solution_stats:        SolutionStat[];
+  test_funnel:           TestFunnel;
+  activation:            ActivationData;
+  daily_events:          { date: string; label: string; count: number }[];
+  top_chapters:          { chapter: string; subject: string; opens: number }[];
+  error?:                string;
 }
 
 async function fetchAllAnalyticsEvents(
@@ -111,39 +123,59 @@ async function fetchAllAnalyticsEvents(
   return allEvents;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const sb = createServerSupabaseClient();
+    const { searchParams } = new URL(req.url);
+    const segment = (searchParams.get("segment") ?? "all").toLowerCase(); // all | free | paid
 
     const thirtyDaysAgo = new Date(Date.now() - 29 * 86_400_000);
     thirtyDaysAgo.setHours(0, 0, 0, 0);
     const iso30 = thirtyDaysAgo.toISOString();
 
-    // ── Fetch everything in parallel ─────────────────────────────────────────
-    const [allEvents, solutionRes, testRes] = await Promise.all([
-      // All events in the last 30 days paginated (for counts + funnel + activation + chapters)
+    // ── Fetch paid users for segmentation + all events in parallel ──────────
+    const [rawAllEvents, solutionRes, testRes, entRes, ordersRes] = await Promise.all([
       fetchAllAnalyticsEvents(sb, iso30),
 
-      // Solution read events with duration
       sb
         .from("analytics_events")
-        .select("feature, duration_ms")
+        .select("student_id, feature, duration_ms")
         .eq("event_name", "solution_read")
         .not("duration_ms", "is", null)
         .order("ts", { ascending: false })
         .limit(10_000),
 
-      // Test lifecycle events
       sb
         .from("analytics_events")
-        .select("event_name, student_id, test_id")
+        .select("student_id, event_name, test_id")
         .in("event_name", ["test_created", "test_started", "test_completed", "test_abandoned"])
         .order("ts", { ascending: false })
         .limit(10_000),
+
+      sb.from("entitlements").select("user_id, access_until"),
+      sb.from("orders").select("user_id, status"),
     ]);
 
-    const solEvents   = (solutionRes.data  ?? []) as Record<string, unknown>[];
-    const testEvents  = (testRes.data      ?? []) as Record<string, unknown>[];
+    const nowIso = new Date().toISOString();
+    const paidUserIds = new Set<string>();
+    (entRes.data ?? []).forEach((e) => {
+      if ((e.access_until as string) > nowIso) paidUserIds.add(e.user_id as string);
+    });
+    (ordersRes.data ?? []).forEach((o) => {
+      if (o.status === "paid") paidUserIds.add(o.user_id as string);
+    });
+
+    // ── Filter events by Free vs Paid segment ────────────────────────────────
+    const filterBySegment = (e: Record<string, unknown>) => {
+      const sid = (e.student_id as string | null) ?? "";
+      if (segment === "paid") return paidUserIds.has(sid);
+      if (segment === "free") return !paidUserIds.has(sid);
+      return true;
+    };
+
+    const allEvents  = rawAllEvents.filter(filterBySegment);
+    const solEvents  = ((solutionRes.data ?? []) as Record<string, unknown>[]).filter(filterBySegment);
+    const testEvents = ((testRes.data ?? []) as Record<string, unknown>[]).filter(filterBySegment);
 
     // ── 1. Feature × event counts ─────────────────────────────────────────────
     type CountKey = string; // `${feature}::${event_name}`
@@ -172,8 +204,43 @@ export async function GET() {
     });
     feature_counts.sort((a, b) => b.event_count - a.event_count);
 
-    // ── 2. Solution read stats ─────────────────────────────────────────────────
-    // Group by feature
+    // ── 2. Repeat Feature Usage Analysis ──────────────────────────────────────
+    // For each feature, compute how many users used it on 2+ distinct calendar days
+    const featUserDays = new Map<string, Map<string, Set<string>>>(); // feature -> student_id -> Set of days
+    const featEventCounts = new Map<string, number>();
+
+    for (const e of allEvents) {
+      const feat = (e.feature as string | null);
+      const sid  = (e.student_id as string | null);
+      const ts   = (e.ts as string | null);
+      if (!feat || !sid || !ts) continue;
+
+      const day = ts.slice(0, 10);
+      if (!featUserDays.has(feat)) featUserDays.set(feat, new Map());
+      const userMap = featUserDays.get(feat)!;
+      if (!userMap.has(sid)) userMap.set(sid, new Set());
+      userMap.get(sid)!.add(day);
+
+      featEventCounts.set(feat, (featEventCounts.get(feat) ?? 0) + 1);
+    }
+
+    const repeat_feature_usage: RepeatFeatureUsage[] = [];
+    featUserDays.forEach((users, feat) => {
+      const totalStudents = users.size;
+      const repeatStudents = [...users.values()].filter((days) => days.size > 1).length;
+      const totalEvents = featEventCounts.get(feat) ?? 0;
+      repeat_feature_usage.push({
+        feature: feat,
+        totalStudents,
+        repeatStudents,
+        repeatRate: totalStudents > 0 ? Math.round((repeatStudents / totalStudents) * 100) : 0,
+        totalEvents,
+        avgEventsPerUser: totalStudents > 0 ? Number((totalEvents / totalStudents).toFixed(1)) : 0,
+      });
+    });
+    repeat_feature_usage.sort((a, b) => b.totalStudents - a.totalStudents);
+
+    // ── 3. Solution read stats ─────────────────────────────────────────────────
     type SolBucket = { feat: string; durations: number[] };
     const solMap = new Map<string, SolBucket>();
     for (const e of solEvents) {
@@ -201,7 +268,7 @@ export async function GET() {
       });
     });
 
-    // ── 3. Test funnel ────────────────────────────────────────────────────────
+    // ── 4. Test funnel ────────────────────────────────────────────────────────
     const testByName: Record<string, Set<string>> = {
       test_created:   new Set(),
       test_started:   new Set(),
@@ -228,9 +295,7 @@ export async function GET() {
       abandon_rate:  started   > 0 ? Math.round((abandoned / started)   * 100) : 0,
     };
 
-    // ── 4. Activation analysis ────────────────────────────────────────────────
-    // Activation = student's FIRST session_id had ≥ 3 answered + ≥ 1 correct
-    // We look at answered events grouped by (student_id, session_id)
+    // ── 5. Activation analysis ────────────────────────────────────────────────
     type SessionKey = string;
     const sessionMap = new Map<SessionKey, { answered: number; correct: number; student: string }>();
 
@@ -251,7 +316,6 @@ export async function GET() {
       }
     }
 
-    // Find each student's first session
     const studentFirstSession = new Map<string, string>();
     for (const e of allEvents) {
       const sid  = (e.student_id as string | null);
@@ -276,7 +340,7 @@ export async function GET() {
       threshold:       "≥ 3 questions answered + ≥ 1 correct in first session",
     };
 
-    // ── 5. Daily events sparkline (30 days) ───────────────────────────────────
+    // ── 6. Daily events sparkline (30 days) ───────────────────────────────────
     const dayBuckets: Record<string, number> = {};
     for (const e of allEvents) {
       const day = (e.ts as string).slice(0, 10);
@@ -292,7 +356,7 @@ export async function GET() {
       };
     });
 
-    // ── 6. Top chapters ───────────────────────────────────────────────────────
+    // ── 7. Top chapters ───────────────────────────────────────────────────────
     const chapMap = new Map<string, { chapter: string; subject: string; opens: number }>();
     for (const e of allEvents) {
       const evt = e.event_name as string;
@@ -309,7 +373,9 @@ export async function GET() {
       .slice(0, 20);
 
     return Response.json({
+      segment,
       feature_counts,
+      repeat_feature_usage,
       solution_stats,
       test_funnel,
       activation,
@@ -321,7 +387,8 @@ export async function GET() {
     console.error("[features]", err);
     return Response.json(
       {
-        feature_counts: [], solution_stats: [], daily_events: [], top_chapters: [],
+        segment: "all",
+        feature_counts: [], repeat_feature_usage: [], solution_stats: [], daily_events: [], top_chapters: [],
         test_funnel:    { created: 0, started: 0, completed: 0, abandoned: 0, start_rate: 0, complete_rate: 0, abandon_rate: 0 },
         activation:     { total_students: 0, activated: 0, activation_rate: 0, threshold: "" },
         error: String(err),

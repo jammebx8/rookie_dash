@@ -19,6 +19,9 @@ export async function GET() {
     const [
       activityTodayRes,
       weeklyActivityRes,
+      allActivityRes,
+      ordersRes,
+      entitlementsRes,
       attemptsTodayRes,
       streakStatsRes,
       recentSessionsRes,
@@ -34,6 +37,23 @@ export async function GET() {
         .select("answered_at, user_id")
         .gte("answered_at", sevenDaysISO)
         .limit(10000),
+
+      sb
+        .from("user_activity")
+        .select("user_id, answered_at")
+        .not("user_id", "is", null)
+        .limit(50000),
+
+      sb
+        .from("orders")
+        .select("id, user_id, plan_id, status, created_at, amount")
+        .order("created_at", { ascending: false })
+        .limit(5000),
+
+      sb
+        .from("entitlements")
+        .select("user_id, access_until")
+        .limit(5000),
 
       sb
         .from("attempts")
@@ -57,18 +77,26 @@ export async function GET() {
     if (attemptsTodayRes.error)  queryErrors.attemptsToday  = attemptsTodayRes.error.message;
     if (streakStatsRes.error)    queryErrors.streakStats    = streakStatsRes.error.message;
     if (recentSessionsRes.error) queryErrors.recentSessions = recentSessionsRes.error.message;
+    if (ordersRes.error)         queryErrors.orders         = ordersRes.error.message;
 
     const activityRows = activityTodayRes.data  ?? [];
     const weeklyRows   = weeklyActivityRes.data ?? [];
+    const allActRows   = allActivityRes.data    ?? [];
+    const orderRows    = ordersRes.data         ?? [];
+    const entRows      = entitlementsRes.data   ?? [];
     const attemptsRows = attemptsTodayRes.data  ?? [];
     const streakRows   = streakStatsRes.data    ?? [];
     const recentRows   = recentSessionsRes.data ?? [];
 
-    // ── Fetch auth profiles for recent-session users ──────────────────────────
-    const recentUserIds = recentRows
-      .map((r) => r.user_id as string)
-      .filter(Boolean);
-    const profileMap = await getUserProfiles(recentUserIds);
+    // ── Paid users set ────────────────────────────────────────────────────────
+    const nowIso = new Date().toISOString();
+    const paidUserIds = new Set<string>();
+    entRows.forEach((e) => {
+      if ((e.access_until as string) > nowIso) paidUserIds.add(e.user_id as string);
+    });
+    orderRows.forEach((o) => {
+      if (o.status === "paid") paidUserIds.add(o.user_id as string);
+    });
 
     // ── 1. Active students today ──────────────────────────────────────────────
     const activeStudentIds = new Set(
@@ -168,6 +196,116 @@ export async function GET() {
         ? Math.max(...streakRows.map((r) => (r.longest_streak as number) ?? 0))
         : 0;
 
+    // ── Item 3: Multiple Checkout Openers Analysis ────────────────────────────
+    const userOrderMap = new Map<string, {
+      count: number;
+      paid: boolean;
+      plans: Set<string>;
+      lastCheckoutAt: string;
+      firstCheckoutAt: string;
+    }>();
+
+    orderRows.forEach((o) => {
+      const uid = o.user_id as string;
+      if (!uid) return;
+      const createdAt = o.created_at as string;
+      const isPaid = o.status === "paid";
+      const plan = (o.plan_id as string) ?? "rookie_pass_yearly";
+
+      if (!userOrderMap.has(uid)) {
+        userOrderMap.set(uid, {
+          count: 0,
+          paid: false,
+          plans: new Set(),
+          lastCheckoutAt: createdAt,
+          firstCheckoutAt: createdAt,
+        });
+      }
+      const uData = userOrderMap.get(uid)!;
+      uData.count++;
+      if (isPaid) uData.paid = true;
+      uData.plans.add(plan);
+      if (createdAt > uData.lastCheckoutAt) uData.lastCheckoutAt = createdAt;
+      if (createdAt < uData.firstCheckoutAt) uData.firstCheckoutAt = createdAt;
+    });
+
+    const totalCheckoutOpeners = userOrderMap.size;
+    const multiCheckoutEntries = [...userOrderMap.entries()].filter(([_, v]) => v.count > 1);
+    multiCheckoutEntries.sort((a, b) => b[1].count - a[1].count);
+
+    const multiCheckoutConverted = multiCheckoutEntries.filter(([_, v]) => v.paid || paidUserIds.has(_)).length;
+    const multiCheckoutAbandoned = multiCheckoutEntries.length - multiCheckoutConverted;
+
+    // ── Item 5: Daily Limit Exceeded Analysis (> 3 questions/day) ─────────────
+    const userDayActivity = new Map<string, Map<string, number>>(); // uid -> day -> count
+    allActRows.forEach((r) => {
+      const uid = r.user_id as string;
+      if (!uid) return;
+      const day = (r.answered_at as string).slice(0, 10);
+      if (!userDayActivity.has(uid)) userDayActivity.set(uid, new Map());
+      const dayMap = userDayActivity.get(uid)!;
+      dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+    });
+
+    interface ExceededUserEntry {
+      userId: string;
+      maxInSingleDay: number;
+      totalAnswered: number;
+      daysExceededCount: number;
+      lastExceededDate: string;
+      isPaid: boolean;
+    }
+
+    const exceededUsersList: ExceededUserEntry[] = [];
+    const keptSolvingBuckets = {
+      q4to5: 0,
+      q6to10: 0,
+      q11to20: 0,
+      q21plus: 0,
+    };
+
+    userDayActivity.forEach((days, uid) => {
+      let maxCount = 0;
+      let totalCount = 0;
+      let daysExceeded = 0;
+      let lastDate = "";
+
+      days.forEach((count, day) => {
+        totalCount += count;
+        if (count > maxCount) maxCount = count;
+        if (count > 3) {
+          daysExceeded++;
+          if (day > lastDate) lastDate = day;
+        }
+      });
+
+      if (daysExceeded > 0) {
+        exceededUsersList.push({
+          userId: uid,
+          maxInSingleDay: maxCount,
+          totalAnswered: totalCount,
+          daysExceededCount: daysExceeded,
+          lastExceededDate: lastDate,
+          isPaid: paidUserIds.has(uid),
+        });
+
+        if (maxCount <= 5) keptSolvingBuckets.q4to5++;
+        else if (maxCount <= 10) keptSolvingBuckets.q6to10++;
+        else if (maxCount <= 20) keptSolvingBuckets.q11to20++;
+        else keptSolvingBuckets.q21plus++;
+      }
+    });
+
+    exceededUsersList.sort((a, b) => b.maxInSingleDay - a.maxInSingleDay);
+
+    // ── Fetch profiles for recent sessions + multi-checkout + top limit exceeded ─
+    const recentUserIds = recentRows.map((r) => r.user_id as string).filter(Boolean);
+    const multiCheckoutUids = multiCheckoutEntries.slice(0, 30).map(([uid]) => uid);
+    const exceededUids = exceededUsersList.slice(0, 30).map((u) => u.userId);
+
+    const allProfileUids = [...new Set([...recentUserIds, ...multiCheckoutUids, ...exceededUids])];
+    const profileMap = await getUserProfiles(allProfileUids);
+
     // ── 9. Recent users — enriched with auth profile ──────────────────────────
     const recentUsers = recentRows.map((r) => {
       const uid     = r.user_id as string;
@@ -183,6 +321,48 @@ export async function GET() {
       };
     });
 
+    // Enriched Multi Checkout Users List
+    const multipleCheckoutUsers = {
+      totalOpeners: totalCheckoutOpeners,
+      multiOpenersCount: multiCheckoutEntries.length,
+      multiOpenersRate: totalCheckoutOpeners > 0 ? Math.round((multiCheckoutEntries.length / totalCheckoutOpeners) * 100) : 0,
+      convertedCount: multiCheckoutConverted,
+      abandonedCount: multiCheckoutAbandoned,
+      users: multiCheckoutEntries.slice(0, 30).map(([uid, v]) => {
+        const p = profileMap.get(uid);
+        const isPaid = v.paid || paidUserIds.has(uid);
+        return {
+          userId: uid,
+          name: p?.name ?? uid.slice(0, 8),
+          email: p?.email ?? "",
+          avatarUrl: p?.avatarUrl ?? "",
+          checkoutCount: v.count,
+          isPaid,
+          status: isPaid ? ("paid" as const) : ("abandoned" as const),
+          planId: [...v.plans].join(", ") || "rookie_pass_yearly",
+          lastCheckoutAt: v.lastCheckoutAt,
+          firstCheckoutAt: v.firstCheckoutAt,
+        };
+      }),
+    };
+
+    // Enriched Limit Exceeded Users List
+    const limitExceededUsers = {
+      totalSolvers: userDayActivity.size,
+      exceededCount: exceededUsersList.length,
+      exceededRate: userDayActivity.size > 0 ? Math.round((exceededUsersList.length / userDayActivity.size) * 100) : 0,
+      keptSolvingBuckets,
+      users: exceededUsersList.slice(0, 30).map((u) => {
+        const p = profileMap.get(u.userId);
+        return {
+          ...u,
+          name: p?.name ?? u.userId.slice(0, 8),
+          email: p?.email ?? "",
+          avatarUrl: p?.avatarUrl ?? "",
+        };
+      }),
+    };
+
     return Response.json({
       activeStudentsToday,
       totalQuestionsToday,
@@ -194,6 +374,8 @@ export async function GET() {
       topChapters,
       weeklyActivity,
       recentUsers,
+      multipleCheckoutUsers,
+      limitExceededUsers,
       _debug: {
         activityRowsToday:   activityRows.length,
         weeklyRows:          weeklyRows.length,

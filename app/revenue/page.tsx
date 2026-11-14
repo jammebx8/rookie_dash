@@ -6,9 +6,37 @@ import {
   DollarSign, TrendingUp, Users, CreditCard,
   BarChart2, RefreshCw, ArrowUpRight, ArrowDownRight,
   Minus, ShoppingCart, CheckCircle, MousePointerClick, Crown,
+  Clock, HelpCircle, FileText, Sparkles,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+export interface ConvertedUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  signupAt: string;
+  paidAt: string;
+  daysToConvert: number;
+  questionsBeforePaying: number;
+  testsBeforePaying: number;
+  triggerFeature: string;
+  amount: number;
+  planId: string;
+}
+
+export interface MultiCheckoutUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  checkoutCount: number;
+  isPaid: boolean;
+  status: "paid" | "abandoned";
+  planId: string;
+  lastCheckoutAt: string;
+}
+
 interface RevenueData {
   checkoutStarts:    number;
   paidCount:         number;
@@ -28,7 +56,31 @@ interface RevenueData {
   avgLtv:            number;
   revenueTimeseries:  { date: string; label: string; revenue: number }[];
   checkoutTimeseries: { date: string; label: string; count: number }[];
-  recentPaid: { id: string; userId: string; amount: number; paidAt: string }[];
+  recentPaid: {
+    id: string;
+    userId: string;
+    name?: string;
+    email?: string;
+    avatarUrl?: string;
+    amount: number;
+    paidAt: string;
+    planId?: string;
+  }[];
+  freeToPaidConversion?: {
+    totalConvertedUsers: number;
+    avgDaysToConvert: number;
+    medianDaysToConvert: number;
+    avgQuestionsBefore: number;
+    avgTestsBefore: number;
+    daysBuckets: { label: string; count: number; pct: number }[];
+    convertedUsers: ConvertedUser[];
+  };
+  multipleCheckoutOpeners?: {
+    totalMultiOpeners: number;
+    convertedCount: number;
+    abandonedCount: number;
+    users: MultiCheckoutUser[];
+  };
   error?: string;
 }
 
@@ -47,6 +99,16 @@ function timeAgo(iso: string) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+function getInitials(name: string, email: string) {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+  if (email && email.trim()) return email.slice(0, 2).toUpperCase();
+  return "U";
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -213,7 +275,7 @@ export default function RevenuePage() {
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Revenue</h1>
+            <h1 className="text-xl font-bold text-slate-900">Revenue & Conversions</h1>
             <p className="text-sm text-slate-500 mt-0.5">{today}</p>
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
@@ -307,7 +369,7 @@ export default function RevenuePage() {
               <ShoppingCart size={15} className="text-slate-400" strokeWidth={1.8} />
               <div>
                 <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide leading-none">Payment Funnel</h2>
-                <p className="text-xs text-slate-400 mt-0.5">From banner click to paid customer</p>
+                <p className="text-xs text-slate-400 mt-0.5">From checkout open to paid customer</p>
               </div>
             </div>
 
@@ -339,7 +401,6 @@ export default function RevenuePage() {
                   sub="not expired"
                 />
 
-                {/* Conversion big number */}
                 <div className="mt-2 pt-4 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-sm text-slate-500">Overall conversion</span>
                   <span className={`text-lg font-black ${
@@ -427,8 +488,8 @@ export default function RevenuePage() {
                       <CheckCircle size={13} className="text-emerald-600" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-mono text-slate-500 truncate">#{p.id}…</p>
-                      <p className="text-[11px] text-slate-400">{timeAgo(p.paidAt)}</p>
+                      <p className="text-xs font-semibold text-slate-800 truncate">{p.name || `#${p.id}…`}</p>
+                      <p className="text-[11px] text-slate-400">{p.email ? `${p.email} · ` : ""}{timeAgo(p.paidAt)}</p>
                     </div>
                     <span className="text-sm font-bold text-slate-900 shrink-0">{fmt(p.amount)}</span>
                   </div>
@@ -437,6 +498,309 @@ export default function RevenuePage() {
             )}
           </div>
         </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SECTION — Free-to-Paid Conversion Analysis (Item 9)
+            Time/days to convert, questions & tests solved pre-payment,
+            and what made them pay
+        ══════════════════════════════════════════════════════════════════ */}
+        <section className={`${CARD} p-6 space-y-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles size={16} className="text-emerald-500" />
+                <h2 className="text-base font-bold text-slate-900">
+                  Free-to-Paid Conversion Journey
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500">
+                Time from signup to payment, questions & tests solved before paying, and trigger topics
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                {data?.freeToPaidConversion?.totalConvertedUsers ?? 0} converted customers
+              </span>
+            </div>
+          </div>
+
+          {/* 4 Conversion Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
+                <Clock size={13} className="text-indigo-500" />
+                <span>Avg Days to Convert</span>
+              </div>
+              <p className="text-2xl font-black text-slate-900 tabular-nums">
+                {loading ? "—" : `${data?.freeToPaidConversion?.avgDaysToConvert ?? 0}d`}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Signup → first payment</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
+                <Clock size={13} className="text-sky-500" />
+                <span>Median Days</span>
+              </div>
+              <p className="text-2xl font-black text-slate-900 tabular-nums">
+                {loading ? "—" : `${data?.freeToPaidConversion?.medianDaysToConvert ?? 0}d`}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">50th percentile student</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
+                <HelpCircle size={13} className="text-amber-500" />
+                <span>Pre-Pay Questions</span>
+              </div>
+              <p className="text-2xl font-black text-slate-900 tabular-nums">
+                {loading ? "—" : (data?.freeToPaidConversion?.avgQuestionsBefore ?? 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Avg solved before purchase</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/70">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
+                <FileText size={13} className="text-violet-500" />
+                <span>Pre-Pay Custom Tests</span>
+              </div>
+              <p className="text-2xl font-black text-slate-900 tabular-nums">
+                {loading ? "—" : `${data?.freeToPaidConversion?.avgTestsBefore ?? 0}`}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Avg tests attempted before paying</p>
+            </div>
+          </div>
+
+          {/* Time-to-Convert Distribution */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">
+              Time to Convert Distribution
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {(data?.freeToPaidConversion?.daysBuckets ?? []).map((b) => (
+                <div key={b.label} className="p-3 rounded-xl border border-slate-100 bg-white shadow-sm">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium text-slate-600">{b.label}</span>
+                    <span className="font-bold text-slate-900">{b.count}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-1">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                      style={{ width: `${b.pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-semibold">{b.pct}% of paid</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Converted Users Table */}
+          <div className="pt-2">
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">
+              Converted Customers & What Made Them Pay
+            </h3>
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Customer</th>
+                    <th className="px-3 py-3 font-semibold">Days to Pay</th>
+                    <th className="px-3 py-3 font-semibold">Pre-Pay Questions</th>
+                    <th className="px-3 py-3 font-semibold">Pre-Pay Tests</th>
+                    <th className="px-3 py-3 font-semibold">Likely Purchase Trigger</th>
+                    <th className="px-3 py-3 font-semibold">Plan & Paid</th>
+                    <th className="px-3 py-3 font-semibold text-right">Paid Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                        Loading conversion data…
+                      </td>
+                    </tr>
+                  ) : (data?.freeToPaidConversion?.convertedUsers ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                        No converted customers found yet
+                      </td>
+                    </tr>
+                  ) : (
+                    (data?.freeToPaidConversion?.convertedUsers ?? []).map((u) => (
+                      <tr key={u.userId} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            {u.avatarUrl ? (
+                              <img
+                                src={u.avatarUrl}
+                                alt={u.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {getInitials(u.name, u.email)}
+                              </div>
+                            )}
+                            <div className="min-w-0 max-w-[160px]">
+                              <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                              <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                            u.daysToConvert <= 1
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : u.daysToConvert <= 7
+                              ? "bg-sky-50 text-sky-700 border-sky-100"
+                              : "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}>
+                            {u.daysToConvert < 1 ? "< 24 hrs" : `${u.daysToConvert} days`}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-bold text-slate-800 tabular-nums">
+                            {u.questionsBeforePaying} Qs
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-medium text-slate-600 tabular-nums">
+                            {u.testsBeforePaying} tests
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="inline-block max-w-[200px] truncate text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px] font-medium" title={u.triggerFeature}>
+                            {u.triggerFeature}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-bold text-slate-900">₹{u.amount}</span>
+                          <span className="block text-[10px] text-slate-400 truncate max-w-[100px]">{u.planId}</span>
+                        </td>
+                        <td className="px-3 py-3 text-right text-slate-500 whitespace-nowrap">
+                          {new Date(u.paidAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SECTION — Multiple Checkout Openers (Item 3)
+            Users who opened checkout multiple times + status
+        ══════════════════════════════════════════════════════════════════ */}
+        <section className={`${CARD} p-6 space-y-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <ShoppingCart size={16} className="text-indigo-500" />
+                <h2 className="text-base font-bold text-slate-900">
+                  Multiple Checkout Openers (High Purchase Intent)
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500">
+                Students who opened the payment modal 2 or more times
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                {data?.multipleCheckoutOpeners?.totalMultiOpeners ?? 0} multi-openers
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                {data?.multipleCheckoutOpeners?.convertedCount ?? 0} paid
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
+                {data?.multipleCheckoutOpeners?.abandonedCount ?? 0} abandoned
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-100">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">User</th>
+                  <th className="px-3 py-3 font-semibold">Times Opened</th>
+                  <th className="px-3 py-3 font-semibold">Status</th>
+                  <th className="px-3 py-3 font-semibold">Target Plan</th>
+                  <th className="px-3 py-3 font-semibold text-right">Last Checkout Opened</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                      Loading multi-checkout users…
+                    </td>
+                  </tr>
+                ) : (data?.multipleCheckoutOpeners?.users ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                      No multiple checkout openers recorded yet
+                    </td>
+                  </tr>
+                ) : (
+                  (data?.multipleCheckoutOpeners?.users ?? []).map((u) => (
+                    <tr key={u.userId} className="hover:bg-slate-50 transition">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          {u.avatarUrl ? (
+                            <img
+                              src={u.avatarUrl}
+                              alt={u.name}
+                              className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {getInitials(u.name, u.email)}
+                            </div>
+                          )}
+                          <div className="min-w-0 max-w-[200px]">
+                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {u.checkoutCount}× opened
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        {u.isPaid ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Paid Customer
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Abandoned (Follow Up)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600 font-mono text-[11px]">
+                        {u.planId}
+                      </td>
+                      <td className="px-3 py-3 text-right text-slate-400 whitespace-nowrap">
+                        {timeAgo(u.lastCheckoutAt)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         {/* ── Footer ── */}
         <footer className="flex items-center justify-between text-xs text-slate-400 pb-4 pt-2 border-t border-slate-200">

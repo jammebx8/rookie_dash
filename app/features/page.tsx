@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  BookOpen, ClipboardList, Layers, RefreshCw, Target,
+  BookOpen, ClipboardList, Layers, RefreshCw, Target, Repeat,
 } from "lucide-react";
 import type { FeaturesData } from "@/app/api/features/route";
 
@@ -107,22 +107,23 @@ function FunnelBar({ label, value, max, color }: {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function FeaturesPage() {
   const [data,        setData]        = useState<FeaturesData | null>(null);
+  const [segment,     setSegment]     = useState<"all" | "free" | "paid">("all");
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const fetchData = useCallback(async (silent = false) => {
+  const fetchData = useCallback(async (targetSegment = segment, silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch("/api/features", { cache: "no-store" });
+      const res = await fetch(`/api/features?segment=${targetSegment}`, { cache: "no-store" });
       setData(await res.json());
       setLastRefresh(new Date());
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [segment]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(segment); }, [fetchData, segment]);
 
   // ── Compute answered counts per feature ────────────────────────────────────
   const answeredByFeature = FEATURES.map(f => {
@@ -139,21 +140,44 @@ export default function FeaturesPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-6">
 
         {/* ── Page header ── */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">Feature Usage</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Which feature students are using most
+              Which features students use most & how free vs paid users engage
             </p>
           </div>
-          <button
-            onClick={() => fetchData(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 border border-slate-200 bg-white px-3 py-1.5 rounded-lg transition hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-            Refresh
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Free vs Paid Segment Switch */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {(["all", "free", "paid"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setSegment(s);
+                    fetchData(s, false);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all capitalize ${
+                    segment === s
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {s === "all" ? "All Users" : s === "free" ? "Free Users" : "Paid Users"}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => fetchData(segment, true)}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 border border-slate-200 bg-white px-3 py-1.5 rounded-lg transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* ── Error ── */}
@@ -288,6 +312,79 @@ export default function FeaturesPage() {
                     </div>
                   ))}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SECTION — Repeat Feature Usage (Habitual Engagement)
+            Which features students return to repeatedly across 2+ distinct days
+        ══════════════════════════════════════════════════════════════════ */}
+        <div className={`${CARD} p-6`}>
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Repeat size={15} className="text-slate-400" strokeWidth={1.8} />
+                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Repeat Feature Usage
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400 ml-[23px]">
+                Students returning to use each feature on 2+ distinct days · {segment === "all" ? "All Users" : segment === "free" ? "Free Users" : "Paid Users"}
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <Skeleton rows={4} />
+          ) : (data?.repeat_feature_usage ?? []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
+              <Repeat size={28} strokeWidth={1.3} />
+              <p className="text-sm font-medium">No repeat feature usage recorded yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(data?.repeat_feature_usage ?? []).map((rf) => {
+                const meta = FEATURES.find((f) => f.key === rf.feature) || {
+                  label: rf.feature.replace(/_/g, " "),
+                  desc: "Feature surface",
+                  bar: "bg-indigo-500",
+                  dot: "bg-indigo-500",
+                  badge: "bg-indigo-50 text-indigo-700 border-indigo-100",
+                };
+                return (
+                  <div key={rf.feature} className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
+                        <span className="text-sm font-semibold text-slate-800 truncate">{meta.label}</span>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border shrink-0 ${meta.badge}`}>
+                        {rf.repeatRate}% repeat
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-3">{meta.desc}</p>
+
+                    <div className="space-y-2">
+                      <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${meta.bar}`}
+                          style={{ width: `${Math.max(rf.repeatRate, rf.repeatStudents > 0 ? 3 : 0)}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-slate-600 pt-0.5">
+                        <span>
+                          <strong className="text-slate-900 font-bold">{rf.repeatStudents}</strong> of {rf.totalStudents} students on 2+ days
+                        </span>
+                        <span className="text-slate-400">
+                          {rf.totalEvents.toLocaleString()} events · avg <strong className="text-slate-700">{rf.avgEventsPerUser}</strong>/user
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

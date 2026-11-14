@@ -9,18 +9,23 @@ import {
   TrendingUp,
   Flame,
   RefreshCw,
-  ChevronUp,
   ChevronDown,
-  Minus,
-  Activity,
+  ChevronUp,
   Award,
-  BarChart2,
   Calendar,
   UserCheck,
+  UserX,
+  UserMinus,
   Zap,
   UserPlus,
   Repeat2,
   ArrowUpRight,
+  ShoppingCart,
+  CreditCard,
+  AlertCircle,
+  CheckCircle,
+  HelpCircle,
+  Filter,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -47,6 +52,31 @@ interface RecentUser {
   lastSeen: string;
 }
 
+interface MultiCheckoutUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  checkoutCount: number;
+  isPaid: boolean;
+  status: "paid" | "abandoned";
+  planId: string;
+  lastCheckoutAt: string;
+  firstCheckoutAt?: string;
+}
+
+interface LimitExceededUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  maxInSingleDay: number;
+  totalAnswered: number;
+  daysExceededCount: number;
+  lastExceededDate: string;
+  isPaid: boolean;
+}
+
 interface MetricsData {
   activeStudentsToday: number;
   totalQuestionsToday: number;
@@ -58,14 +88,34 @@ interface MetricsData {
   topChapters: Chapter[];
   weeklyActivity: WeekDay[];
   recentUsers: RecentUser[];
+  multipleCheckoutUsers?: {
+    totalOpeners: number;
+    multiOpenersCount: number;
+    multiOpenersRate: number;
+    convertedCount: number;
+    abandonedCount: number;
+    users: MultiCheckoutUser[];
+  };
+  limitExceededUsers?: {
+    totalSolvers: number;
+    exceededCount: number;
+    exceededRate: number;
+    keptSolvingBuckets: {
+      q4to5: number;
+      q6to10: number;
+      q11to20: number;
+      q21plus: number;
+    };
+    users: LimitExceededUser[];
+  };
   queryErrors?: Record<string, string>;
   error?: string;
 }
 
 interface SignupData {
-  totalAccounts: number;       // auth.users — everyone who signed up
-  totalStudents: number;       // public.users — completed onboarding
-  conversionRate: number;      // totalStudents / totalAccounts %
+  totalAccounts: number;
+  totalStudents: number;
+  conversionRate: number;
   newSignupsToday: number;
   newSignupsThisWeek: number;
   signupTimeseries: { date: string; label: string; count: number }[];
@@ -95,9 +145,35 @@ interface RetainedUser {
   email: string;
   avatarUrl: string;
   activeDaysLast7: number;
+  isPaid?: boolean;
+}
+
+interface DropoffProductUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  onlyActiveDate: string;
+  questionsCount: number;
+  firstChapter: string;
+  isPaid: boolean;
+}
+
+interface DropoffSignupUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  signupAt: string;
+  activityType: "zero_activity" | "day1_only";
+  questionsCount: number;
+  isPaid: boolean;
 }
 
 interface RetentionData {
+  interval: "daily" | "weekly" | "monthly";
+  segment: "all" | "free" | "paid";
+  headers: string[];
   cohortTable: CohortRow[];
   rollingDn: (number | null)[];
   monthlyRetention: number;
@@ -105,6 +181,32 @@ interface RetentionData {
   thisMonthActiveUsers: number;
   monthlyRetained: number;
   topRetainedUsers: RetainedUser[];
+  neverReturnedAfterUsing?: {
+    total: number;
+    neverReturnedCount: number;
+    neverReturnedPct: number;
+    returnedCount: number;
+    returnedPct: number;
+    sampleUsers: DropoffProductUser[];
+  };
+  neverReturnedAfterSignup?: {
+    totalSignups: number;
+    neverReturnedCount: number;
+    neverReturnedPct: number;
+    zeroActivityCount: number;
+    zeroActivityPct: number;
+    day1OnlyCount: number;
+    day1OnlyPct: number;
+    returnedCount: number;
+    returnedPct: number;
+    sampleUsers: DropoffSignupUser[];
+  };
+  repeatPlatformUsage?: {
+    totalUsers: number;
+    repeatUsersCount: number;
+    repeatRate: number;
+    distribution: { label: string; days: string | number; count: number; pct: number }[];
+  };
   error?: string;
 }
 
@@ -118,6 +220,7 @@ function fmtSeconds(sec: number): string {
 }
 
 function timeAgo(iso: string): string {
+  if (!iso) return "—";
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 1) return "just now";
@@ -150,71 +253,68 @@ function StatCard({
   sub,
   accent = "default",
   trend,
-  loading,
+  loading = false,
 }: {
   icon: React.ElementType;
   label: string;
   value: string | number;
   sub?: string;
-  accent?: "green" | "indigo" | "amber" | "red" | "default";
+  accent?: "default" | "green" | "indigo" | "amber" | "rose";
   trend?: "up" | "down" | "flat";
   loading?: boolean;
 }) {
-  const accentMap = {
-    green:   { bg: "bg-emerald-50", icon: "text-emerald-600", ring: "border-emerald-100" },
-    indigo:  { bg: "bg-indigo-50",  icon: "text-indigo-600",  ring: "border-indigo-100"  },
-    amber:   { bg: "bg-amber-50",   icon: "text-amber-600",   ring: "border-amber-100"   },
-    red:     { bg: "bg-red-50",     icon: "text-red-600",     ring: "border-red-100"     },
-    default: { bg: "bg-slate-50",   icon: "text-slate-500",   ring: "border-slate-100"   },
+  const accentClasses = {
+    default: "bg-slate-50 text-slate-600 border-slate-100",
+    green:   "bg-emerald-50 text-emerald-600 border-emerald-100",
+    indigo:  "bg-indigo-50 text-indigo-600 border-indigo-100",
+    amber:   "bg-amber-50 text-amber-600 border-amber-100",
+    rose:    "bg-rose-50 text-rose-600 border-rose-100",
   };
-  const c = accentMap[accent];
-  const TrendIcon = trend === "up" ? ChevronUp : trend === "down" ? ChevronDown : Minus;
-  const trendColor =
-    trend === "up" ? "text-emerald-600" : trend === "down" ? "text-red-500" : "text-slate-400";
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-        <div className="shimmer h-4 w-24 rounded mb-3" />
-        <div className="shimmer h-8 w-16 rounded mb-2" />
-        <div className="shimmer h-3 w-32 rounded" />
-      </div>
-    );
-  }
 
   return (
-    <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 rounded-xl ${c.bg} ${c.ring} border flex items-center justify-center shrink-0`}>
-          <Icon size={18} className={c.icon} strokeWidth={1.8} />
+    <div className="bg-white rounded-[14px] border border-slate-200 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate pr-1">
+          {label}
+        </span>
+        <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${accentClasses[accent]}`}>
+          <Icon size={14} strokeWidth={2} />
         </div>
-        {trend && (
-          <span className={`flex items-center gap-0.5 text-xs font-semibold ${trendColor}`}>
-            <TrendIcon size={13} />
-          </span>
-        )}
       </div>
-      <p className="mt-4 text-2xl font-bold text-slate-900 leading-none tracking-tight">{value}</p>
-      <p className="mt-1 text-sm font-medium text-slate-500">{label}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
+      <div>
+        <div className="flex items-baseline gap-1.5">
+          {loading ? (
+            <div className="shimmer h-7 w-16 rounded" />
+          ) : (
+            <span className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
+              {value}
+            </span>
+          )}
+          {trend === "up" && <span className="text-emerald-600 text-xs font-semibold">▲</span>}
+          {trend === "down" && <span className="text-rose-500 text-xs font-semibold">▼</span>}
+        </div>
+        {sub && <p className="text-[11px] text-slate-400 mt-1 truncate">{sub}</p>}
+      </div>
     </div>
   );
 }
 
 function SectionHeader({
   title,
-  icon: Icon,
   sub,
+  icon: Icon,
 }: {
   title: string;
-  icon: React.ElementType;
   sub?: string;
+  icon: React.ElementType;
 }) {
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <Icon size={16} className="text-slate-400" strokeWidth={1.8} />
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+        <Icon size={14} strokeWidth={2} />
+      </div>
       <div>
-        <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide leading-none">
+        <h2 className="text-sm font-bold text-slate-800 tracking-tight leading-none">
           {title}
         </h2>
         {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
@@ -226,11 +326,11 @@ function SectionHeader({
 function UserAvatar({
   name,
   avatarUrl,
-  gradient,
+  gradient = "emerald",
 }: {
   name: string;
   avatarUrl: string;
-  gradient: "emerald" | "indigo" | "violet";
+  gradient?: "emerald" | "indigo" | "violet" | "amber";
 }) {
   const initials =
     name
@@ -244,6 +344,7 @@ function UserAvatar({
     emerald: "from-emerald-400 to-emerald-600",
     indigo:  "from-indigo-400 to-indigo-600",
     violet:  "from-violet-400 to-violet-600",
+    amber:   "from-amber-400 to-amber-600",
   };
 
   if (avatarUrl) {
@@ -263,15 +364,12 @@ function UserAvatar({
   }
 
   return (
-    <div
-      className={`w-9 h-9 rounded-full bg-gradient-to-br ${gMap[gradient]} flex items-center justify-center shrink-0`}
-    >
+    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${gMap[gradient]} flex items-center justify-center shrink-0`}>
       <span className="text-white text-[11px] font-bold">{initials}</span>
     </div>
   );
 }
 
-/** Inline bar chart used for DAU sparkline / signup sparkline */
 function SparkBar({
   data,
   valueKey,
@@ -365,13 +463,15 @@ function RetentionRing({ pct, loading }: { pct: number; loading: boolean }) {
   );
 }
 
-// ─── Cohort Heatmap ───────────────────────────────────────────────────────────
+// ─── Dynamic Cohort Heatmap ───────────────────────────────────────────────────
 
 function CohortHeatmap({
   rows,
+  headers = ["D1", "D2", "D3", "D4", "D5", "D6", "D7"],
   loading,
 }: {
   rows: CohortRow[];
+  headers?: string[];
   loading: boolean;
 }) {
   if (loading) {
@@ -388,25 +488,23 @@ function CohortHeatmap({
     return (
       <div className="flex flex-col items-center justify-center py-10 text-slate-400">
         <Repeat2 size={28} strokeWidth={1.4} />
-        <p className="mt-2 text-sm">Not enough data yet</p>
+        <p className="mt-2 text-sm">Not enough cohort data in this segment</p>
       </div>
     );
   }
-
-  const days = ["D1", "D2", "D3", "D4", "D5", "D6", "D7"];
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-separate border-spacing-0.5">
         <thead>
           <tr>
-            <th className="text-left text-slate-400 font-medium pb-2 pr-3 whitespace-nowrap w-20">
+            <th className="text-left text-slate-400 font-medium pb-2 pr-3 whitespace-nowrap w-24">
               Cohort
             </th>
-            <th className="text-slate-400 font-medium pb-2 px-1 w-12">Size</th>
-            {days.map((d) => (
-              <th key={d} className="text-slate-400 font-medium pb-2 px-1 w-12">
-                {d}
+            <th className="text-slate-400 font-medium pb-2 px-1 w-12 text-center">Size</th>
+            {headers.map((h) => (
+              <th key={h} className="text-slate-400 font-medium pb-2 px-1 w-12 text-center">
+                {h}
               </th>
             ))}
           </tr>
@@ -436,13 +534,12 @@ function CohortHeatmap({
             </tr>
           ))}
         </tbody>
-        {/* Rolling average row */}
       </table>
     </div>
   );
 }
 
-// ─── Main dashboard ───────────────────────────────────────────────────────────
+// ─── Main Dashboard Page ──────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const [metrics,    setMetrics]    = useState<MetricsData    | null>(null);
@@ -450,8 +547,30 @@ export default function DashboardPage() {
   const [engagement, setEngagement] = useState<EngagementData | null>(null);
   const [retention,  setRetention]  = useState<RetentionData  | null>(null);
   const [loading,    setLoading]    = useState(true);
+  const [retentionLoading, setRetentionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+  // Interactive controls for Cohort Retention
+  const [retentionInterval, setRetentionInterval] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [retentionSegment,  setRetentionSegment]  = useState<"all" | "free" | "paid">("all");
+
+  // Toggleable lists for drop-off users
+  const [showProductDropoff, setShowProductDropoff] = useState(false);
+  const [showSignupDropoff,  setShowSignupDropoff]  = useState(false);
+
+  const fetchRetention = useCallback(async (intv = retentionInterval, seg = retentionSegment) => {
+    setRetentionLoading(true);
+    try {
+      const res = await fetch(`/api/retention?interval=${intv}&segment=${seg}`, { cache: "no-store" });
+      const r = await res.json();
+      setRetention(r);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRetentionLoading(false);
+    }
+  }, [retentionInterval, retentionSegment]);
 
   const fetchAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -461,7 +580,7 @@ export default function DashboardPage() {
         fetch("/api/metrics",    { cache: "no-store" }),
         fetch("/api/signups",    { cache: "no-store" }),
         fetch("/api/engagement", { cache: "no-store" }),
-        fetch("/api/retention",  { cache: "no-store" }),
+        fetch(`/api/retention?interval=${retentionInterval}&segment=${retentionSegment}`, { cache: "no-store" }),
       ]);
       const [m, s, e, r] = await Promise.all([
         mRes.json(), sRes.json(), eRes.json(), rRes.json(),
@@ -477,7 +596,7 @@ export default function DashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [retentionInterval, retentionSegment]);
 
   useEffect(() => {
     fetchAll();
@@ -485,19 +604,26 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, [fetchAll]);
 
-  const _today = new Date().toLocaleDateString("en-IN", {
+  // Handle retention switch changes
+  const handleIntervalChange = (newIntv: "daily" | "weekly" | "monthly") => {
+    setRetentionInterval(newIntv);
+    fetchRetention(newIntv, retentionSegment);
+  };
+
+  const handleSegmentChange = (newSeg: "all" | "free" | "paid") => {
+    setRetentionSegment(newSeg);
+    fetchRetention(retentionInterval, newSeg);
+  };
+
+  const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
-  const today = _today;
 
   return (
     <div className="min-h-screen bg-[#f8f9fb]">
-
-      {/* header is now rendered by NavBar in layout.tsx */}
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
 
-        {/* ── Hero banner ── */}
+        {/* ── Hero Banner ── */}
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-[#001428] to-emerald-950 text-white shadow-[0_4px_32px_rgba(0,0,0,0.18)]">
           <div className="absolute inset-0 opacity-[0.25] pointer-events-none"
             style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
@@ -514,12 +640,11 @@ export default function DashboardPage() {
                     {today}
                   </span>
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-400/15 border border-emerald-400/30 text-xs font-semibold text-emerald-300">
-                    <Activity size={10} />
-                    Live
+                    Live Platform Analytics
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Platform Overview</h1>
-                <p className="text-white/50 text-sm mt-1.5">Real-time metrics for the Rookie learning platform</p>
+                <p className="text-white/50 text-sm mt-1.5">Real-time engagement, retention cohorts &amp; user conversion signals</p>
               </div>
 
               {/* hero summary pills */}
@@ -534,7 +659,7 @@ export default function DashboardPage() {
                 </button>
                 {[
                   { label: "total accounts",  value: loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString() },
-                  { label: "students",        value: loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString() },
+                  { label: "product users",   value: loading ? "—" : (retention?.neverReturnedAfterUsing?.total ?? 0).toLocaleString() },
                   { label: "active today",    value: loading ? "—" : (engagement?.dau ?? 0).toString(), green: true },
                   { label: "D1 retention",    value: loading ? "—" : `${retention?.rollingDn?.[0] ?? metrics?.retention ?? 0}%` },
                 ].map(({ label, value, green }) => (
@@ -568,152 +693,515 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* ── Error banner ── */}
-        {!loading && metrics?.queryErrors && Object.keys(metrics.queryErrors).length > 0 && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-            <p className="text-sm font-semibold text-red-700 mb-1">
-              Supabase errors — check credentials in <code className="font-mono bg-red-100 px-1 rounded">.env</code>
-            </p>
-            <ul className="space-y-0.5">
-              {Object.entries(metrics.queryErrors).map(([k, v]) => (
-                <li key={k} className="text-xs text-red-600 font-mono"><span className="font-semibold">{k}:</span> {v}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* ── Row 1: Core KPI tiles ── */}
+        {/* ── Row 1: Core KPI Tiles ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          {/* Accounts & students */}
-          <StatCard icon={Users}     label="Total accounts" value={loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString()} sub="auth.users — all signups"            accent="default"                                        loading={loading} />
-          <StatCard icon={UserCheck} label="Students"       value={loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString()} sub={`${signups?.conversionRate ?? 0}% converted`} accent="indigo"                               loading={loading} />
-          {/* Today activity */}
-          <StatCard icon={Activity}  label="Active today"   value={loading ? "—" : (engagement?.dau ?? 0)}                        sub="attempts + activity + sessions"    accent="green"  trend="up"                              loading={loading} />
-          <StatCard icon={BookOpen}  label="Questions"      value={loading ? "—" : metrics?.totalQuestionsToday ?? 0}              sub="solved today"                      accent="indigo"                                         loading={loading} />
-          {/* Quality */}
-          <StatCard icon={Target}    label="Accuracy"       value={loading ? "—" : `${metrics?.accuracyRate ?? 0}%`}               sub="correct today"                     accent="green"  trend={(metrics?.accuracyRate ?? 0) >= 70 ? "up" : (metrics?.accuracyRate ?? 0) >= 40 ? "flat" : "down"} loading={loading} />
-          <StatCard icon={Clock}     label="Avg time / Q"   value={loading ? "—" : fmtSeconds(metrics?.avgTimeSec ?? 0)}           sub="today"                             accent="amber"                                          loading={loading} />
-          {/* Growth */}
-          <StatCard icon={UserPlus}  label="New today"      value={loading ? "—" : signups?.newSignupsToday ?? 0}                  sub={`${signups?.newSignupsThisWeek ?? 0} this week`} accent="indigo"                           loading={loading} />
-          <StatCard icon={Flame}     label="Avg streak"     value={loading ? "—" : `${metrics?.avgStreak ?? 0}d`}                  sub={`max ${metrics?.maxStreak ?? 0}d`} accent="amber"                                          loading={loading} />
+          <StatCard icon={Users}     label="Total Accounts" value={loading ? "—" : (signups?.totalAccounts ?? 0).toLocaleString()} sub="auth.users" accent="default" loading={loading} />
+          <StatCard icon={UserCheck} label="Students"       value={loading ? "—" : (signups?.totalStudents ?? 0).toLocaleString()} sub={`${signups?.conversionRate ?? 0}% converted`} accent="indigo" loading={loading} />
+          <StatCard icon={Zap}       label="Active Today"   value={loading ? "—" : (engagement?.dau ?? 0)}                        sub="DAU" accent="green" trend="up" loading={loading} />
+          <StatCard icon={BookOpen}  label="Questions"      value={loading ? "—" : metrics?.totalQuestionsToday ?? 0}              sub="solved today" accent="indigo" loading={loading} />
+          <StatCard icon={Target}    label="Accuracy"       value={loading ? "—" : `${metrics?.accuracyRate ?? 0}%`}               sub="correct today" accent="green" loading={loading} />
+          <StatCard icon={Clock}     label="Avg time / Q"   value={loading ? "—" : fmtSeconds(metrics?.avgTimeSec ?? 0)}           sub="today" accent="amber" loading={loading} />
+          <StatCard icon={UserPlus}  label="New Today"      value={loading ? "—" : signups?.newSignupsToday ?? 0}                  sub={`${signups?.newSignupsThisWeek ?? 0} this week`} accent="indigo" loading={loading} />
+          <StatCard icon={Flame}     label="Avg Streak"     value={loading ? "—" : `${metrics?.avgStreak ?? 0}d`}                  sub={`max ${metrics?.maxStreak ?? 0}d`} accent="amber" loading={loading} />
         </div>
 
-        {/* ── Row 2: DAU / WAU / MAU + stickiness ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard icon={Activity}   label="DAU"        value={loading ? "—" : (engagement?.dau ?? 0)} sub="active users today"       accent="green"   loading={loading} />
-          <StatCard icon={BarChart2}  label="WAU"        value={loading ? "—" : (engagement?.wau ?? 0)} sub="last 7 days"              accent="indigo"  loading={loading} />
-          <StatCard icon={TrendingUp} label="MAU"        value={loading ? "—" : (engagement?.mau ?? 0)} sub="last 30 days"             accent="default" loading={loading} />
-          <StatCard icon={Zap}        label="Stickiness" value={loading ? "—" : `${engagement?.stickiness ?? 0}%`} sub="DAU / MAU · engagement depth" accent={(engagement?.stickiness ?? 0) >= 20 ? "green" : "amber"} loading={loading} />
-        </div>
-
-        {/* ── Row 3: DAU chart + signup chart ── */}
+        {/* ── Row 2: Never Returned / Churn Analysis (Items 1 & 2) ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-            <SectionHeader title="Daily Active Users — 30 days" icon={Activity} sub="Union of user_activity + attempts + sessions" />
-            <SparkBar data={engagement?.dauTimeseries ?? []} valueKey="dau" loading={loading} color="emerald" />
-            <div className="flex justify-between mt-2">
-              <span className="text-[10px] text-slate-400">{engagement?.dauTimeseries?.[0]?.label ?? ""}</span>
-              <span className="text-[10px] text-slate-400">Today</span>
+
+          {/* Item 1: Students who never returned after using product */}
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between">
+                <SectionHeader
+                  title="Never Returned After 1st Product Use"
+                  icon={UserMinus}
+                  sub="Active on day 1 only — never returned on any subsequent day"
+                />
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+                  {retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}% Drop-off
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {retention?.neverReturnedAfterUsing?.neverReturnedCount ?? 0}
+                    <span className="text-xs font-normal text-slate-400 ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
+                  </p>
+                  <p className="text-xs text-rose-600 font-medium mt-0.5">Left after 1 day ({retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%)</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600">
+                    {retention?.neverReturnedAfterUsing?.returnedCount ?? 0}
+                    <span className="text-xs font-normal text-slate-400 ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
+                  </p>
+                  <p className="text-xs text-emerald-600 font-medium mt-0.5">Came back on Day 2+ ({retention?.neverReturnedAfterUsing?.returnedPct ?? 0}%)</p>
+                </div>
+              </div>
+
+              {/* Progress bar visual */}
+              <div className="mt-3">
+                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="bg-rose-500 transition-all duration-700"
+                    style={{ width: `${retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%` }}
+                    title={`Never returned: ${retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%`}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all duration-700"
+                    style={{ width: `${retention?.neverReturnedAfterUsing?.returnedPct ?? 0}%` }}
+                    title={`Returned: ${retention?.neverReturnedAfterUsing?.returnedPct ?? 0}%`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowProductDropoff(!showProductDropoff)}
+                className="w-full flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 transition py-1"
+              >
+                <span>{showProductDropoff ? "Hide" : "View"} drop-off student list</span>
+                {showProductDropoff ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {showProductDropoff && (
+                <div className="mt-3 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                  {(retention?.neverReturnedAfterUsing?.sampleUsers ?? []).length === 0 ? (
+                    <p className="text-xs text-slate-400 py-3 text-center">No drop-off students found</p>
+                  ) : (
+                    (retention?.neverReturnedAfterUsing?.sampleUsers ?? []).map((u) => (
+                      <div key={u.userId} className="py-2.5 flex items-center justify-between text-xs gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="amber" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[11px] font-medium text-slate-600 block">{u.questionsCount} Qs solved</span>
+                          <span className="text-[10px] text-slate-400">{u.onlyActiveDate}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-            <SectionHeader title="New Signups — 30 days" icon={UserPlus} sub={`${signups?.newSignupsThisWeek ?? 0} this week · ${signups?.newSignupsToday ?? 0} today · ${(signups?.totalAccounts ?? 0).toLocaleString()} total accounts`} />
-            <SparkBar data={signups?.signupTimeseries ?? []} valueKey="count" loading={loading} color="indigo" />
-            <div className="flex justify-between mt-2">
-              <span className="text-[10px] text-slate-400">{signups?.signupTimeseries?.[0]?.label ?? ""}</span>
-              <span className="text-[10px] text-slate-400">Today</span>
+          {/* Item 2: Students who never returned after sign up */}
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-start justify-between">
+                <SectionHeader
+                  title="Never Returned After Sign Up"
+                  icon={UserX}
+                  sub="Signed up but had 0 activity, or bounced on signup day"
+                />
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+                  {retention?.neverReturnedAfterSignup?.neverReturnedPct ?? 0}% Drop-off
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2.5 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                <div>
+                  <p className="text-xl font-bold text-slate-800">{retention?.neverReturnedAfterSignup?.neverReturnedCount ?? 0}</p>
+                  <p className="text-[11px] text-rose-600 font-medium mt-0.5">Total left ({retention?.neverReturnedAfterSignup?.neverReturnedPct ?? 0}%)</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-amber-600">{retention?.neverReturnedAfterSignup?.zeroActivityCount ?? 0}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">0 Qs solved ({retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%)</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-slate-700">{retention?.neverReturnedAfterSignup?.day1OnlyCount ?? 0}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Day 1 bounce ({retention?.neverReturnedAfterSignup?.day1OnlyPct ?? 0}%)</p>
+                </div>
+              </div>
+
+              {/* Progress bar visual */}
+              <div className="mt-3">
+                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="bg-red-500 transition-all duration-700"
+                    style={{ width: `${retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%` }}
+                    title={`Zero activity: ${retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%`}
+                  />
+                  <div
+                    className="bg-amber-400 transition-all duration-700"
+                    style={{ width: `${retention?.neverReturnedAfterSignup?.day1OnlyPct ?? 0}%` }}
+                    title={`Day 1 bounce: ${retention?.neverReturnedAfterSignup?.day1OnlyPct ?? 0}%`}
+                  />
+                  <div
+                    className="bg-emerald-500 transition-all duration-700"
+                    style={{ width: `${retention?.neverReturnedAfterSignup?.returnedPct ?? 0}%` }}
+                    title={`Returned: ${retention?.neverReturnedAfterSignup?.returnedPct ?? 0}%`}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                  <span>{retention?.neverReturnedAfterSignup?.zeroActivityCount ?? 0} ghost signups</span>
+                  <span>{retention?.neverReturnedAfterSignup?.returnedCount ?? 0} retained accounts</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowSignupDropoff(!showSignupDropoff)}
+                className="w-full flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 transition py-1"
+              >
+                <span>{showSignupDropoff ? "Hide" : "View"} drop-off signup list</span>
+                {showSignupDropoff ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {showSignupDropoff && (
+                <div className="mt-3 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                  {(retention?.neverReturnedAfterSignup?.sampleUsers ?? []).length === 0 ? (
+                    <p className="text-xs text-slate-400 py-3 text-center">No drop-off signups found</p>
+                  ) : (
+                    (retention?.neverReturnedAfterSignup?.sampleUsers ?? []).map((u) => (
+                      <div key={u.userId} className="py-2.5 flex items-center justify-between text-xs gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${u.activityType === "zero_activity" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+                            {u.activityType === "zero_activity" ? "Zero Activity" : "Day 1 Only"}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">{u.signupAt ? new Date(u.signupAt).toLocaleDateString("en-IN") : "—"}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── Row 4: Retention — the main section ── */}
+        {/* ── Row 3: Cohort Retention with Interval & Segment Switches (Item 4) ── */}
         <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <SectionHeader
-              title="Cohort Retention — D1 to D7"
-              icon={Repeat2}
-              sub="% of each day's new users who returned on each subsequent day"
-            />
-            {/* Rolling averages pill row */}
+          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <SectionHeader
+                title={`Cohort Retention — ${retentionInterval === "weekly" ? "Weekly (W1–W8)" : retentionInterval === "monthly" ? "Monthly (M1–M6)" : "Daily (D1–D7)"}`}
+                icon={Repeat2}
+                sub={`% of ${retentionSegment === "paid" ? "PAID" : retentionSegment === "free" ? "FREE" : "ALL"} users who returned in subsequent periods`}
+              />
+            </div>
+
+            {/* Interactive Switches: Interval and Free/Paid Segment */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Interval Switch */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium">
+                {(["daily", "weekly", "monthly"] as const).map((intv) => (
+                  <button
+                    key={intv}
+                    onClick={() => handleIntervalChange(intv)}
+                    className={`px-3 py-1 rounded-md capitalize transition ${retentionInterval === intv ? "bg-white text-slate-900 font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  >
+                    {intv}
+                  </button>
+                ))}
+              </div>
+
+              {/* Free vs Paid Segment Switch */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium">
+                {(["all", "free", "paid"] as const).map((seg) => (
+                  <button
+                    key={seg}
+                    onClick={() => handleSegmentChange(seg)}
+                    className={`px-3 py-1 rounded-md capitalize transition ${retentionSegment === seg ? "bg-emerald-600 text-white font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  >
+                    {seg === "all" ? "All Users" : seg === "free" ? "Free Users" : "Paid Users"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Rolling average pill row */}
+          <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              Average Retention:
+            </span>
             <div className="flex items-center gap-1.5 flex-wrap">
               {(retention?.rollingDn ?? []).map((pct, i) => (
                 <span
                   key={i}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${pctBg(pct)} ${pctColor(pct)} border-current/20`}
                 >
-                  D{i + 1}: {pct !== null ? `${pct}%` : "—"}
+                  {retention?.headers?.[i] ?? `D${i + 1}`}: {pct !== null ? `${pct}%` : "—"}
                 </span>
               ))}
             </div>
           </div>
+
           <div className="p-5">
-            <CohortHeatmap rows={retention?.cohortTable ?? []} loading={loading} />
+            <CohortHeatmap
+              rows={retention?.cohortTable ?? []}
+              headers={retention?.headers}
+              loading={retentionLoading || loading}
+            />
           </div>
         </div>
 
-        {/* ── Row 5: Monthly retention + top retained users ── */}
+        {/* ── Row 4: Repeat Platform Usage (Item 6) + Monthly Retention ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          {/* Monthly retention card */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col">
-            <SectionHeader title="Monthly Retention" icon={TrendingUp} />
-            <div className="flex-1 flex flex-col items-center justify-center gap-3">
-              <RetentionRing pct={retention?.monthlyRetention ?? 0} loading={loading} />
-              <div className="text-center space-y-1">
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Last month&apos;s users who returned this month
-                </p>
-                {!loading && (
-                  <p className="text-xs text-slate-400">
-                    {retention?.monthlyRetained ?? 0} of {retention?.lastMonthActiveUsers ?? 0} users
-                  </p>
-                )}
-              </div>
+          {/* Repeat usage distribution */}
+          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+            <div className="flex items-start justify-between mb-4">
+              <SectionHeader
+                title="Platform Repeat Usage"
+                icon={Repeat2}
+                sub="Distribution of how many distinct days students return and practice"
+              />
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                {retention?.repeatPlatformUsage?.repeatRate ?? 0}% Repeat Users
+              </span>
             </div>
-            {!loading && (
-              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2 text-center">
-                <div>
-                  <p className="text-lg font-bold text-slate-800">{retention?.lastMonthActiveUsers ?? 0}</p>
-                  <p className="text-xs text-slate-400">Last month</p>
+
+            <div className="space-y-3 pt-2">
+              {(retention?.repeatPlatformUsage?.distribution ?? []).map((item) => (
+                <div key={item.label}>
+                  <div className="flex items-center justify-between text-xs font-medium mb-1">
+                    <span className="text-slate-700 font-semibold">{item.label}</span>
+                    <span className="text-slate-500 tabular-nums">
+                      <b>{item.count}</b> students ({item.pct}%)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${item.days === 1 ? "bg-slate-300" : "bg-emerald-500"}`}
+                      style={{ width: `${item.pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-bold text-emerald-600">{retention?.thisMonthActiveUsers ?? 0}</p>
-                  <p className="text-xs text-slate-400">This month</p>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
 
-          {/* Top retained users — active 5+ of last 7 days */}
-          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+          {/* Monthly retention card */}
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+            <div>
+              <SectionHeader title="Monthly Retention" icon={TrendingUp} sub="Last month active returning this month" />
+              <div className="my-5 flex flex-col items-center justify-center gap-2">
+                <RetentionRing pct={retention?.monthlyRetention ?? 0} loading={loading} />
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  <b>{retention?.monthlyRetained ?? 0}</b> of {retention?.lastMonthActiveUsers ?? 0} users retained
+                </p>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-center">
+              <div>
+                <p className="text-lg font-bold text-slate-800">{retention?.lastMonthActiveUsers ?? 0}</p>
+                <p className="text-xs text-slate-400">Last month</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-emerald-600">{retention?.thisMonthActiveUsers ?? 0}</p>
+                <p className="text-xs text-slate-400">This month</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 5: Users Who Exceeded 3-Question Daily Limit (Item 5) ── */}
+        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <SectionHeader
+                title="Daily Limit Exceeded (> 3 Questions) &amp; High-Volume Solvers"
+                icon={Flame}
+                sub={`${metrics?.limitExceededUsers?.exceededCount ?? 0} students reached the 3-question free limit and kept practicing`}
+              />
+            </div>
+            {/* Kept solving pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                4–5 Qs: {metrics?.limitExceededUsers?.keptSolvingBuckets?.q4to5 ?? 0}
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
+                6–10 Qs: {metrics?.limitExceededUsers?.keptSolvingBuckets?.q6to10 ?? 0}
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
+                11–20 Qs: {metrics?.limitExceededUsers?.keptSolvingBuckets?.q11to20 ?? 0}
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                21+ Qs: {metrics?.limitExceededUsers?.keptSolvingBuckets?.q21plus ?? 0}
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="shimmer h-12 rounded-lg" />
+              ))}
+            </div>
+          ) : (metrics?.limitExceededUsers?.users ?? []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+              <Flame size={28} strokeWidth={1.4} />
+              <p className="mt-2 text-sm">No users have exceeded the 3-question limit yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                  <tr>
+                    <th className="py-2.5 px-5">Student</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-center">Max Qs in 1 Day</th>
+                    <th className="py-2.5 px-3 text-center">Total Qs Solved</th>
+                    <th className="py-2.5 px-3 text-center">Days Limit Exceeded</th>
+                    <th className="py-2.5 px-5 text-right">Last Exceeded</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(metrics?.limitExceededUsers?.users ?? []).map((u) => (
+                    <tr key={u.userId} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-2.5">
+                          <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold text-[10px] ${u.isPaid ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                          {u.isPaid ? "Paid Pass" : "Free User"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-bold text-slate-800 text-sm">
+                        {u.maxInSingleDay}
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-slate-600">
+                        {u.totalAnswered}
+                      </td>
+                      <td className="py-3 px-3 text-center font-semibold text-indigo-600">
+                        {u.daysExceededCount} {u.daysExceededCount === 1 ? "day" : "days"}
+                      </td>
+                      <td className="py-3 px-5 text-right text-slate-400">
+                        {u.lastExceededDate}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ── Row 6: Multiple Checkout Openers (Item 3) ── */}
+        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <SectionHeader
+                title="Multiple Checkout Openers (High Purchase Intent)"
+                icon={ShoppingCart}
+                sub={`${metrics?.multipleCheckoutUsers?.multiOpenersCount ?? 0} students opened Razorpay checkout 2 or more times`}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {metrics?.multipleCheckoutUsers?.convertedCount ?? 0} Converted
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                {metrics?.multipleCheckoutUsers?.abandonedCount ?? 0} Abandoned (Potential Leads)
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="shimmer h-12 rounded-lg" />
+              ))}
+            </div>
+          ) : (metrics?.multipleCheckoutUsers?.users ?? []).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+              <ShoppingCart size={28} strokeWidth={1.4} />
+              <p className="mt-2 text-sm">No multiple checkout openers recorded</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                  <tr>
+                    <th className="py-2.5 px-5">Student</th>
+                    <th className="py-2.5 px-3 text-center">Times Checkout Opened</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Plan Attempted</th>
+                    <th className="py-2.5 px-5 text-right">Last Checkout Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(metrics?.multipleCheckoutUsers?.users ?? []).map((u) => (
+                    <tr key={u.userId} className="hover:bg-slate-50/80 transition">
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-2.5">
+                          <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-sm bg-slate-100 px-2.5 py-0.5 rounded-full">
+                          {u.checkoutCount} times
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold text-[10px] ${u.status === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                          {u.status === "paid" ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
+                          {u.status === "paid" ? "Paid" : "Abandoned Checkout"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-medium text-slate-600">
+                        {u.planId}
+                      </td>
+                      <td className="py-3 px-5 text-right text-slate-400">
+                        {u.lastCheckoutAt ? timeAgo(u.lastCheckoutAt) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ── Row 7: Power Users & Recent Active Students ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Top retained power users */}
+          <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
             <div className="px-5 pt-5 pb-3 border-b border-slate-100">
               <SectionHeader
-                title="Power Users — last 7 days"
+                title="Power Users — Last 7 Days"
                 icon={Award}
-                sub="Active on 5 or more of the last 7 days"
+                sub="Students active on 5 or more of the last 7 days"
               />
             </div>
             {loading ? (
-              <div className="divide-y divide-slate-100">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <div className="shimmer w-9 h-9 rounded-full shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="shimmer h-3 w-28 rounded" />
-                      <div className="shimmer h-2.5 w-40 rounded" />
-                    </div>
-                    <div className="shimmer h-5 w-14 rounded-full" />
-                  </div>
-                ))}
+              <div className="p-5 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="shimmer h-10 rounded" />)}
               </div>
             ) : (retention?.topRetainedUsers ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-slate-400">
                 <Award size={28} strokeWidth={1.4} />
-                <p className="mt-2 text-sm">No power users yet this week</p>
+                <p className="mt-2 text-sm">No power users active 5+ days this week</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+              <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
                 {(retention?.topRetainedUsers ?? []).map((u, i) => (
                   <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
                     <span className="w-5 text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
@@ -736,140 +1224,36 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* ── Row 6: All chapters today + streak stats ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          {/* All chapters today — scrollable */}
-          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+          {/* Recently Active Students */}
+          <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
             <div className="px-5 pt-5 pb-3 border-b border-slate-100">
-              <SectionHeader
-                title="All Chapters Solved Today"
-                icon={BookOpen}
-                sub={`${metrics?.topChapters?.length ?? 0} chapters active`}
-              />
+              <SectionHeader title="Recently Active Students" icon={Zap} sub="Real-time activity from latest sessions" />
             </div>
             {loading ? (
-              <div className="p-5 space-y-2.5">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="shimmer h-8 rounded-lg" />
+              <div className="p-5 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="shimmer h-10 rounded" />)}
+              </div>
+            ) : (metrics?.recentUsers ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                <Users size={28} strokeWidth={1.4} />
+                <p className="mt-2 text-sm">No recent activity</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
+                {(metrics?.recentUsers ?? []).map((u) => (
+                  <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
+                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{u.subject} — {u.chapter}</p>
+                    </div>
+                    <span className="text-xs text-slate-400 shrink-0">{timeAgo(u.lastSeen)}</span>
+                  </div>
                 ))}
               </div>
-            ) : (metrics?.topChapters ?? []).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                <BookOpen size={28} strokeWidth={1.4} />
-                <p className="mt-2 text-sm">No activity yet today</p>
-              </div>
-            ) : (
-              <div className="p-5 space-y-2 max-h-[420px] overflow-y-auto">
-                {(metrics?.topChapters ?? []).map((ch, i) => {
-                  const max = metrics!.topChapters[0].count;
-                  const pct = Math.round((ch.count / max) * 100);
-                  return (
-                    <div key={ch.title}>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {i + 1}
-                          </span>
-                          <span className="text-sm font-medium text-slate-800 truncate">{ch.title}</span>
-                          <span className="text-xs text-slate-400 shrink-0 hidden sm:block">{ch.subject}</span>
-                        </div>
-                        <span className="text-xs font-semibold text-slate-500 shrink-0 ml-2">{ch.count}</span>
-                      </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             )}
           </div>
-
-          {/* Streak stats */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
-            <SectionHeader title="Streak Stats" icon={Flame} />
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => <div key={i} className="shimmer h-16 rounded-xl" />)}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Flame size={13} className="text-amber-500" />
-                    <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Avg current streak</span>
-                  </div>
-                  <p className="text-3xl font-bold text-amber-600 leading-none">
-                    {metrics?.avgStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
-                  </p>
-                </div>
-                <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Award size={13} className="text-indigo-500" />
-                    <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">All-time record</span>
-                  </div>
-                  <p className="text-3xl font-bold text-indigo-600 leading-none">
-                    {metrics?.maxStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
-                  </p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <ArrowUpRight size={13} className="text-emerald-500" />
-                    <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">New signups this week</span>
-                  </div>
-                  <p className="text-3xl font-bold text-emerald-600 leading-none">
-                    {signups?.newSignupsThisWeek ?? 0}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Row 7: Recently active students ── */}
-        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-3 border-b border-slate-100">
-            <SectionHeader title="Recently Active Students" icon={Activity} sub="Last updated session from user_recent_session" />
-          </div>
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="px-5 py-3 flex items-center gap-3 border-b border-slate-100">
-                  <div className="shimmer w-9 h-9 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="shimmer h-3 w-28 rounded" />
-                    <div className="shimmer h-2.5 w-44 rounded" />
-                  </div>
-                  <div className="shimmer h-2.5 w-10 rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (metrics?.recentUsers ?? []).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-              <Users size={28} strokeWidth={1.4} />
-              <p className="mt-2 text-sm">No recent activity</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2">
-              {(metrics?.recentUsers ?? []).map((u) => (
-                <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition border-b border-slate-100">
-                  <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{u.email}</p>
-                    <p className="text-xs text-slate-400 truncate mt-0.5">{u.subject} — {u.chapter}</p>
-                  </div>
-                  <span className="text-xs text-slate-400 shrink-0">{timeAgo(u.lastSeen)}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ── Footer ── */}

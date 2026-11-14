@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { getUserProfiles } from "@/lib/getUserProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +12,12 @@ export async function GET() {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 1);
-    const yearStart  = new Date(now.getFullYear(), 0, 1);
 
     // ── Fetch raw data in parallel ─────────────────────────────────────────
-    const [ordersRes, entitlementsRes] = await Promise.all([
+    const [ordersRes, entitlementsRes, usersRes, activityRes, testsRes] = await Promise.all([
       sb
         .from("orders")
-        .select("id, user_id, amount, status, created_at, paid_at")
+        .select("id, user_id, plan_id, amount, status, created_at, paid_at")
         .order("created_at", { ascending: false })
         .limit(5000),
 
@@ -25,6 +25,20 @@ export async function GET() {
         .from("entitlements")
         .select("user_id, plan_id, access_until, granted_at")
         .limit(5000),
+
+      sb.auth.admin.listUsers({ perPage: 1000 }),
+
+      sb
+        .from("user_activity")
+        .select("user_id, answered_at, chapter_title, subject_name")
+        .not("user_id", "is", null)
+        .limit(50000),
+
+      sb
+        .from("test_attempts")
+        .select("id, user_id, title, created_at, status")
+        .not("user_id", "is", null)
+        .limit(10000),
     ]);
 
     if (ordersRes.error)       throw new Error(`orders: ${ordersRes.error.message}`);
@@ -32,13 +46,19 @@ export async function GET() {
 
     const orders       = ordersRes.data       ?? [];
     const entitlements = entitlementsRes.data ?? [];
+    const authUsers    = usersRes.data?.users ?? [];
+    const allActivity  = activityRes.data     ?? [];
+    const allTests     = testsRes.data        ?? [];
+
+    // Map of user signup dates from auth.users
+    const userSignupMap = new Map<string, string>();
+    authUsers.forEach((u) => userSignupMap.set(u.id, u.created_at));
 
     // ── Classify orders ────────────────────────────────────────────────────
     const allCreated = orders; // every order row = one checkout page hit
     const paid       = orders.filter((o) => o.status === "paid");
 
     // ── Conversion funnel ──────────────────────────────────────────────────
-    // "clicked through to payment" = created an order (checkout opened)
     const checkoutStarts  = allCreated.length;
     const paidCount       = paid.length;
     const conversionRate  = checkoutStarts > 0
@@ -136,13 +156,174 @@ export async function GET() {
       count,
     }));
 
+    // ── Item 9: Free-to-Paid Conversion Deep-Dive ────────────────────────────
+    // Earliest paid order per user
+    const firstPaidOrders = new Map<string, typeof paid[0]>();
+    paid.forEach((o) => {
+      const uid = o.user_id as string;
+      if (!firstPaidOrders.has(uid) || (o.paid_at as string) < (firstPaidOrders.get(uid)!.paid_at as string)) {
+        firstPaidOrders.set(uid, o);
+      }
+    });
+
+    interface ConversionEntry {
+      userId: string;
+      signupAt: string;
+      paidAt: string;
+      daysToConvert: number;
+      questionsBeforePaying: number;
+      testsBeforePaying: number;
+      triggerFeature: string;
+      amount: number;
+      planId: string;
+    }
+
+    const conversionEntries: ConversionEntry[] = [];
+    const daysBuckets = {
+      under24h: 0,
+      days1to3: 0,
+      days4to7: 0,
+      days8to14: 0,
+      days15plus: 0,
+    };
+
+    firstPaidOrders.forEach((o, uid) => {
+      const paidAt = o.paid_at as string;
+      const signupAt = userSignupMap.get(uid) || (o.created_at as string);
+      const days = Math.max(0, (new Date(paidAt).getTime() - new Date(signupAt).getTime()) / 86400000);
+      const roundedDays = Number(days.toFixed(1));
+
+      if (days < 1) daysBuckets.under24h++;
+      else if (days <= 3) daysBuckets.days1to3++;
+      else if (days <= 7) daysBuckets.days4to7++;
+      else if (days <= 14) daysBuckets.days8to14++;
+      else daysBuckets.days15plus++;
+
+      // Pre-conversion questions
+      const userActsBefore = allActivity.filter((a) => a.user_id === uid && (a.answered_at as string) < paidAt);
+      const questionsBefore = userActsBefore.length;
+
+      // Pre-conversion tests
+      const userTestsBefore = allTests.filter((t) => t.user_id === uid && (t.created_at as string) < paidAt);
+      const testsBefore = userTestsBefore.length;
+
+      // Trigger feature / last activity before payment
+      let lastActDesc: string | null = null;
+      let lastActTs: string | null = null;
+      for (const a of userActsBefore) {
+        const ts = a.answered_at as string;
+        if (!lastActTs || ts > lastActTs) {
+          lastActTs = ts;
+          lastActDesc = `${a.subject_name ?? "Subject"} · ${a.chapter_title ?? "Practice"}`;
+        }
+      }
+      for (const t of userTestsBefore) {
+        const ts = t.created_at as string;
+        if (!lastActTs || ts > lastActTs) {
+          lastActTs = ts;
+          lastActDesc = `Custom Test · ${t.title || "Custom Test"}`;
+        }
+      }
+
+      conversionEntries.push({
+        userId: uid,
+        signupAt,
+        paidAt,
+        daysToConvert: roundedDays,
+        questionsBeforePaying: questionsBefore,
+        testsBeforePaying: testsBefore,
+        triggerFeature: lastActDesc || (questionsBefore > 0 ? "Question Viewer" : testsBefore > 0 ? "Custom Test" : "Direct Upgrade"),
+        amount: ((o.amount as number) ?? 0) / PAISE,
+        planId: (o.plan_id as string) ?? "rookie_pass_yearly",
+      });
+    });
+
+    conversionEntries.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+
+    // Compute averages & medians
+    const allDays = conversionEntries.map((e) => e.daysToConvert).sort((a, b) => a - b);
+    const avgDaysToConvert = allDays.length > 0 ? Number((allDays.reduce((a, b) => a + b, 0) / allDays.length).toFixed(1)) : 0;
+    const medianDaysToConvert = allDays.length > 0 ? allDays[Math.floor(allDays.length / 2)] : 0;
+
+    const allQuestions = conversionEntries.map((e) => e.questionsBeforePaying);
+    const avgQuestionsBefore = allQuestions.length > 0 ? Math.round(allQuestions.reduce((a, b) => a + b, 0) / allQuestions.length) : 0;
+
+    const allTestsCount = conversionEntries.map((e) => e.testsBeforePaying);
+    const avgTestsBefore = allTestsCount.length > 0 ? Number((allTestsCount.reduce((a, b) => a + b, 0) / allTestsCount.length).toFixed(1)) : 0;
+
+    // ── Item 3: Multiple Checkout Openers for Revenue tab ─────────────────────
+    const userCheckoutMap = new Map<string, {
+      count: number;
+      paid: boolean;
+      plans: Set<string>;
+      lastCheckoutAt: string;
+    }>();
+
+    allCreated.forEach((o) => {
+      const uid = o.user_id as string;
+      if (!uid) return;
+      if (!userCheckoutMap.has(uid)) {
+        userCheckoutMap.set(uid, { count: 0, paid: false, plans: new Set(), lastCheckoutAt: o.created_at as string });
+      }
+      const item = userCheckoutMap.get(uid)!;
+      item.count++;
+      if (o.status === "paid") item.paid = true;
+      if (o.plan_id) item.plans.add(o.plan_id as string);
+      if ((o.created_at as string) > item.lastCheckoutAt) item.lastCheckoutAt = o.created_at as string;
+    });
+
+    const multiCheckoutEntries = [...userCheckoutMap.entries()]
+      .filter(([_, v]) => v.count > 1)
+      .sort((a, b) => b[1].count - a[1].count);
+
+    // Profile enrichment for converted users + multi-checkout users
+    const uidsToEnrich = [
+      ...conversionEntries.map((c) => c.userId),
+      ...multiCheckoutEntries.slice(0, 30).map(([uid]) => uid),
+    ];
+    const profileMap = await getUserProfiles([...new Set(uidsToEnrich)]);
+
+    const enrichedConvertedUsers = conversionEntries.map((c) => {
+      const p = profileMap.get(c.userId);
+      return {
+        ...c,
+        name: p?.name ?? c.userId.slice(0, 8),
+        email: p?.email ?? "",
+        avatarUrl: p?.avatarUrl ?? "",
+      };
+    });
+
+    const enrichedMultiCheckoutUsers = multiCheckoutEntries.slice(0, 30).map(([uid, v]) => {
+      const p = profileMap.get(uid);
+      const isPaid = v.paid || payingUserIds.has(uid);
+      return {
+        userId: uid,
+        name: p?.name ?? uid.slice(0, 8),
+        email: p?.email ?? "",
+        avatarUrl: p?.avatarUrl ?? "",
+        checkoutCount: v.count,
+        isPaid,
+        status: isPaid ? ("paid" as const) : ("abandoned" as const),
+        planId: [...v.plans].join(", ") || "rookie_pass_yearly",
+        lastCheckoutAt: v.lastCheckoutAt,
+      };
+    });
+
     // ── Recent paid orders (last 20) ───────────────────────────────────────
-    const recentPaid = paid.slice(0, 20).map((o) => ({
-      id:      (o.id as string).slice(0, 8),
-      userId:  (o.user_id as string).slice(0, 8),
-      amount:  (o.amount as number) / PAISE,
-      paidAt:  o.paid_at as string,
-    }));
+    const recentPaid = paid.slice(0, 20).map((o) => {
+      const uid = o.user_id as string;
+      const p = profileMap.get(uid);
+      return {
+        id:      (o.id as string).slice(0, 8),
+        userId:  uid.slice(0, 8),
+        name:    p?.name ?? uid.slice(0, 8),
+        email:   p?.email ?? "",
+        avatarUrl: p?.avatarUrl ?? "",
+        amount:  (o.amount as number) / PAISE,
+        paidAt:  o.paid_at as string,
+        planId:  (o.plan_id as string) ?? "rookie_pass_yearly",
+      };
+    });
 
     return Response.json({
       // Funnel
@@ -169,6 +350,31 @@ export async function GET() {
       checkoutTimeseries,
       // Recent
       recentPaid,
+
+      // Free-to-paid conversion analysis
+      freeToPaidConversion: {
+        totalConvertedUsers: conversionEntries.length,
+        avgDaysToConvert,
+        medianDaysToConvert,
+        avgQuestionsBefore,
+        avgTestsBefore,
+        daysBuckets: [
+          { label: "< 24 hrs", count: daysBuckets.under24h, pct: conversionEntries.length > 0 ? Math.round((daysBuckets.under24h / conversionEntries.length) * 100) : 0 },
+          { label: "1–3 days", count: daysBuckets.days1to3, pct: conversionEntries.length > 0 ? Math.round((daysBuckets.days1to3 / conversionEntries.length) * 100) : 0 },
+          { label: "4–7 days", count: daysBuckets.days4to7, pct: conversionEntries.length > 0 ? Math.round((daysBuckets.days4to7 / conversionEntries.length) * 100) : 0 },
+          { label: "8–14 days", count: daysBuckets.days8to14, pct: conversionEntries.length > 0 ? Math.round((daysBuckets.days8to14 / conversionEntries.length) * 100) : 0 },
+          { label: "15+ days", count: daysBuckets.days15plus, pct: conversionEntries.length > 0 ? Math.round((daysBuckets.days15plus / conversionEntries.length) * 100) : 0 },
+        ],
+        convertedUsers: enrichedConvertedUsers,
+      },
+
+      // Multiple checkout openers
+      multipleCheckoutOpeners: {
+        totalMultiOpeners: multiCheckoutEntries.length,
+        convertedCount: multiCheckoutEntries.filter(([_, v]) => v.paid).length,
+        abandonedCount: multiCheckoutEntries.filter(([_, v]) => !v.paid).length,
+        users: enrichedMultiCheckoutUsers,
+      },
     });
   } catch (err) {
     console.error("[revenue]", err);
