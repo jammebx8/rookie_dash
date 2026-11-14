@@ -26,6 +26,8 @@ import {
   CheckCircle,
   HelpCircle,
   Filter,
+  BarChart2,
+  Activity,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -705,7 +707,152 @@ export default function DashboardPage() {
           <StatCard icon={Flame}     label="Avg Streak"     value={loading ? "—" : `${metrics?.avgStreak ?? 0}d`}                  sub={`max ${metrics?.maxStreak ?? 0}d`} accent="amber" loading={loading} />
         </div>
 
-        {/* ── Row 2: Never Returned / Churn Analysis (Items 1 & 2) ── */}
+        {/* ── Error banner ── */}
+        {!loading && metrics?.queryErrors && Object.keys(metrics.queryErrors).length > 0 && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+            <p className="text-sm font-semibold text-red-700 mb-1">
+              Supabase errors — check credentials in <code className="font-mono bg-red-100 px-1 rounded">.env</code>
+            </p>
+            <ul className="space-y-0.5">
+              {Object.entries(metrics.queryErrors).map(([k, v]) => (
+                <li key={k} className="text-xs text-red-600 font-mono"><span className="font-semibold">{k}:</span> {v}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── Row 2: DAU / WAU / MAU + Stickiness ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard icon={Activity}   label="DAU"        value={loading ? "—" : (engagement?.dau ?? 0)} sub="active users today"       accent="green"   loading={loading} />
+          <StatCard icon={BarChart2}  label="WAU"        value={loading ? "—" : (engagement?.wau ?? 0)} sub="last 7 days"              accent="indigo"  loading={loading} />
+          <StatCard icon={TrendingUp} label="MAU"        value={loading ? "—" : (engagement?.mau ?? 0)} sub="last 30 days"             accent="default" loading={loading} />
+          <StatCard icon={Zap}        label="Stickiness" value={loading ? "—" : `${engagement?.stickiness ?? 0}%`} sub="DAU / MAU · engagement depth" accent={(engagement?.stickiness ?? 0) >= 20 ? "green" : "amber"} loading={loading} />
+        </div>
+
+        {/* ── Row 3: Daily Active Users (30d) + Signups (30d) ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+            <SectionHeader title="Daily Active Users — 30 days" icon={Activity} sub="Union of user_activity + attempts + sessions" />
+            <SparkBar data={engagement?.dauTimeseries ?? []} valueKey="dau" loading={loading} color="emerald" />
+            <div className="flex justify-between mt-2">
+              <span className="text-[10px] text-slate-400">{engagement?.dauTimeseries?.[0]?.label ?? ""}</span>
+              <span className="text-[10px] text-slate-400">Today</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+            <SectionHeader title="New Signups — 30 days" icon={UserPlus} sub={`${signups?.newSignupsThisWeek ?? 0} this week · ${signups?.newSignupsToday ?? 0} today · ${(signups?.totalAccounts ?? 0).toLocaleString()} total accounts`} />
+            <SparkBar data={signups?.signupTimeseries ?? []} valueKey="count" loading={loading} color="indigo" />
+            <div className="flex justify-between mt-2">
+              <span className="text-[10px] text-slate-400">{signups?.signupTimeseries?.[0]?.label ?? ""}</span>
+              <span className="text-[10px] text-slate-400">Today</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 4: All Chapters Solved Today + Streak Stats ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* All chapters today — scrollable with question counts across chapters */}
+          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+            <div className="px-5 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+              <SectionHeader
+                title="All Chapters Solved Today"
+                icon={BookOpen}
+                sub={`${metrics?.topChapters?.length ?? 0} chapters active · questions attempted across chapters today`}
+              />
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                {metrics?.totalQuestionsToday ?? 0} Qs today
+              </span>
+            </div>
+            {loading ? (
+              <div className="p-5 space-y-2.5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="shimmer h-8 rounded-lg" />
+                ))}
+              </div>
+            ) : (metrics?.topChapters ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <BookOpen size={28} strokeWidth={1.4} />
+                <p className="mt-2 text-sm font-medium">No activity yet today</p>
+                <p className="text-xs text-slate-400 mt-0.5">When students solve questions, chapters will appear here in real time</p>
+              </div>
+            ) : (
+              <div className="p-5 space-y-3 max-h-[440px] overflow-y-auto">
+                {(metrics?.topChapters ?? []).map((ch, i) => {
+                  const max = metrics?.topChapters?.[0]?.count ?? 1;
+                  const pct = Math.round((ch.count / max) * 100);
+                  return (
+                    <div key={ch.title}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <span className="text-sm font-semibold text-slate-800 truncate">{ch.title}</span>
+                          <span className="text-xs text-slate-400 shrink-0 hidden sm:block bg-slate-100 px-1.5 py-0.5 rounded font-medium">{ch.subject}</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 shrink-0 ml-2 tabular-nums">
+                          {ch.count} {ch.count === 1 ? "question" : "questions"}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Streak stats */}
+          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+            <div>
+              <SectionHeader title="Streak Stats" icon={Flame} sub="Habitual daily problem solving" />
+              {loading ? (
+                <div className="space-y-3 mt-3">
+                  {Array.from({ length: 3 }).map((_, i) => <div key={i} className="shimmer h-16 rounded-xl" />)}
+                </div>
+              ) : (
+                <div className="space-y-3 mt-3">
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Flame size={13} className="text-amber-500" />
+                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Avg current streak</span>
+                    </div>
+                    <p className="text-3xl font-bold text-amber-600 leading-none">
+                      {metrics?.avgStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Award size={13} className="text-indigo-500" />
+                      <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">All-time record</span>
+                    </div>
+                    <p className="text-3xl font-bold text-indigo-600 leading-none">
+                      {metrics?.maxStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <ArrowUpRight size={13} className="text-emerald-500" />
+                      <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">New signups this week</span>
+                    </div>
+                    <p className="text-3xl font-bold text-emerald-600 leading-none">
+                      {signups?.newSignupsThisWeek ?? 0}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 5: Never Returned / Churn Analysis (Items 1 & 2) ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Item 1: Students who never returned after using product */}
