@@ -251,36 +251,49 @@ export async function GET() {
     const allTestsCount = conversionEntries.map((e) => e.testsBeforePaying);
     const avgTestsBefore = allTestsCount.length > 0 ? Number((allTestsCount.reduce((a, b) => a + b, 0) / allTestsCount.length).toFixed(1)) : 0;
 
-    // ── Item 3: Multiple Checkout Openers for Revenue tab ─────────────────────
+    // ── Item 3: Checkout Openers (Single & Multiple) for Revenue tab ─────────
     const userCheckoutMap = new Map<string, {
       count: number;
       paid: boolean;
       plans: Set<string>;
       lastCheckoutAt: string;
+      lastAmount: number;
     }>();
 
     allCreated.forEach((o) => {
       const uid = o.user_id as string;
       if (!uid) return;
       if (!userCheckoutMap.has(uid)) {
-        userCheckoutMap.set(uid, { count: 0, paid: false, plans: new Set(), lastCheckoutAt: o.created_at as string });
+        userCheckoutMap.set(uid, {
+          count: 0,
+          paid: false,
+          plans: new Set(),
+          lastCheckoutAt: o.created_at as string,
+          lastAmount: ((o.amount as number) ?? 0) / PAISE,
+        });
       }
       const item = userCheckoutMap.get(uid)!;
       item.count++;
       if (o.status === "paid") item.paid = true;
       if (o.plan_id) item.plans.add(o.plan_id as string);
-      if ((o.created_at as string) > item.lastCheckoutAt) item.lastCheckoutAt = o.created_at as string;
+      if ((o.created_at as string) > item.lastCheckoutAt) {
+        item.lastCheckoutAt = o.created_at as string;
+        item.lastAmount = ((o.amount as number) ?? 0) / PAISE;
+      }
     });
 
-    const multiCheckoutEntries = [...userCheckoutMap.entries()]
-      .filter(([_, v]) => v.count > 1)
-      .sort((a, b) => b[1].count - a[1].count);
+    // All unique checkout users sorted by most recent checkout first
+    const allCheckoutEntries = [...userCheckoutMap.entries()]
+      .sort((a, b) => b[1].lastCheckoutAt.localeCompare(a[1].lastCheckoutAt));
 
-    // Profile enrichment for converted users + multi-checkout users
+    const multiCheckoutEntries = allCheckoutEntries.filter(([_, v]) => v.count > 1);
+
+    // Profile enrichment for all users involved in conversions, checkouts, and paid orders
     const uidsToEnrich = [
       ...conversionEntries.map((c) => c.userId),
-      ...multiCheckoutEntries.slice(0, 30).map(([uid]) => uid),
-    ];
+      ...[...userCheckoutMap.keys()],
+      ...paid.map((o) => o.user_id as string),
+    ].filter(Boolean);
     const profileMap = await getUserProfiles([...new Set(uidsToEnrich)]);
 
     const enrichedConvertedUsers = conversionEntries.map((c) => {
@@ -293,7 +306,7 @@ export async function GET() {
       };
     });
 
-    const enrichedMultiCheckoutUsers = multiCheckoutEntries.slice(0, 30).map(([uid, v]) => {
+    const enrichedMultiCheckoutUsers = multiCheckoutEntries.map(([uid, v]) => {
       const p = profileMap.get(uid);
       const isPaid = v.paid || payingUserIds.has(uid);
       return {
@@ -306,6 +319,46 @@ export async function GET() {
         status: isPaid ? ("paid" as const) : ("abandoned" as const),
         planId: [...v.plans].join(", ") || "rookie_pass_yearly",
         lastCheckoutAt: v.lastCheckoutAt,
+        lastAmount: v.lastAmount,
+      };
+    });
+
+    const enrichedAllCheckoutUsers = allCheckoutEntries.map(([uid, v]) => {
+      const p = profileMap.get(uid);
+      const isPaid = v.paid || payingUserIds.has(uid);
+      return {
+        userId: uid,
+        name: p?.name ?? uid.slice(0, 8),
+        email: p?.email ?? "",
+        avatarUrl: p?.avatarUrl ?? "",
+        checkoutCount: v.count,
+        isPaid,
+        status: isPaid ? ("paid" as const) : ("abandoned" as const),
+        planId: [...v.plans].join(", ") || "rookie_pass_yearly",
+        lastCheckoutAt: v.lastCheckoutAt,
+        lastAmount: v.lastAmount,
+      };
+    });
+
+    // Every single checkout event arranged as most recent first
+    const enrichedAllCheckoutEvents = allCreated.map((o) => {
+      const uid = o.user_id as string;
+      const p = profileMap.get(uid);
+      const isPaid = o.status === "paid" || payingUserIds.has(uid);
+      const userTotal = userCheckoutMap.get(uid)?.count ?? 1;
+      return {
+        id: o.id as string,
+        userId: uid,
+        name: p?.name ?? (uid ? uid.slice(0, 8) : "Anonymous"),
+        email: p?.email ?? "",
+        avatarUrl: p?.avatarUrl ?? "",
+        planId: (o.plan_id as string) ?? "rookie_pass_yearly",
+        amount: ((o.amount as number) ?? 0) / PAISE,
+        status: (o.status as string) ?? "created",
+        createdAt: o.created_at as string,
+        paidAt: (o.paid_at as string) ?? null,
+        userCheckoutCount: userTotal,
+        isPaidUser: isPaid,
       };
     });
 
@@ -315,7 +368,7 @@ export async function GET() {
       const p = profileMap.get(uid);
       return {
         id:      (o.id as string).slice(0, 8),
-        userId:  uid.slice(0, 8),
+        userId:  uid,
         name:    p?.name ?? uid.slice(0, 8),
         email:   p?.email ?? "",
         avatarUrl: p?.avatarUrl ?? "",
@@ -374,6 +427,18 @@ export async function GET() {
         convertedCount: multiCheckoutEntries.filter(([_, v]) => v.paid).length,
         abandonedCount: multiCheckoutEntries.filter(([_, v]) => !v.paid).length,
         users: enrichedMultiCheckoutUsers,
+      },
+
+      // Complete checkout directory (all users who initiated checkout, single & multiple, + all events)
+      checkoutDirectory: {
+        totalCheckouts: allCreated.length,
+        totalUsers: allCheckoutEntries.length,
+        singleClickUsersCount: allCheckoutEntries.filter(([_, v]) => v.count === 1).length,
+        multiClickUsersCount: allCheckoutEntries.filter(([_, v]) => v.count > 1).length,
+        convertedCount: allCheckoutEntries.filter(([_, v]) => v.paid || payingUserIds.has(_[0])).length,
+        abandonedCount: allCheckoutEntries.filter(([_, v]) => !v.paid && !payingUserIds.has(_[0])).length,
+        users: enrichedAllCheckoutUsers,
+        allEvents: enrichedAllCheckoutEvents,
       },
     });
   } catch (err) {

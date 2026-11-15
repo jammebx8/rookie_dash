@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Users,
   BookOpen,
@@ -28,6 +29,8 @@ import {
   Filter,
   BarChart2,
   Activity,
+  Search,
+  Crown,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,6 +55,22 @@ interface RecentUser {
   chapter: string;
   subject: string;
   lastSeen: string;
+}
+
+interface DirectoryUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  class: string;
+  exam: string;
+  rookieCoins: number;
+  createdAt: string;
+  totalAttempts: number;
+  lastSeen: string;
+  isPaid: boolean;
+  planId: string;
+  isNew: boolean;
 }
 
 interface MultiCheckoutUser {
@@ -561,6 +580,11 @@ export default function DashboardPage() {
   const [showProductDropoff, setShowProductDropoff] = useState(false);
   const [showSignupDropoff,  setShowSignupDropoff]  = useState(false);
 
+  // All registered users directory state
+  const [allUsers,   setAllUsers]   = useState<DirectoryUser[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userFilter, setUserFilter] = useState<"all" | "active" | "paid" | "free" | "new">("all");
+
   const fetchRetention = useCallback(async (intv = retentionInterval, seg = retentionSegment) => {
     setRetentionLoading(true);
     try {
@@ -578,19 +602,21 @@ export default function DashboardPage() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const [mRes, sRes, eRes, rRes] = await Promise.all([
+      const [mRes, sRes, eRes, rRes, uRes] = await Promise.all([
         fetch("/api/metrics",    { cache: "no-store" }),
         fetch("/api/signups",    { cache: "no-store" }),
         fetch("/api/engagement", { cache: "no-store" }),
         fetch(`/api/retention?interval=${retentionInterval}&segment=${retentionSegment}`, { cache: "no-store" }),
+        fetch("/api/users",      { cache: "no-store" }),
       ]);
-      const [m, s, e, r] = await Promise.all([
-        mRes.json(), sRes.json(), eRes.json(), rRes.json(),
+      const [m, s, e, r, u] = await Promise.all([
+        mRes.json(), sRes.json(), eRes.json(), rRes.json(), uRes.json(),
       ]);
       setMetrics(m);
       setSignups(s);
       setEngagement(e);
       setRetention(r);
+      setAllUsers(u?.users ?? []);
       setLastRefresh(new Date());
     } catch (err) {
       console.error(err);
@@ -922,7 +948,9 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="amber" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block">
+                              {u.name}
+                            </Link>
                             <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
                           </div>
                         </div>
@@ -1012,7 +1040,9 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block">
+                              {u.name}
+                            </Link>
                             <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
                           </div>
                         </div>
@@ -1216,7 +1246,9 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-2.5">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-900 truncate hover:text-indigo-600 hover:underline block">
+                              {u.name}
+                            </Link>
                             <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
                           </div>
                         </div>
@@ -1296,7 +1328,9 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-2.5">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 truncate">{u.name}</p>
+                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-900 truncate hover:text-indigo-600 hover:underline block">
+                              {u.name}
+                            </Link>
                             <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
                           </div>
                         </div>
@@ -1350,11 +1384,17 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
                 {(retention?.topRetainedUsers ?? []).map((u, i) => (
-                  <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
+                  <Link
+                    key={u.userId}
+                    href={`/users/${u.userId}`}
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition group cursor-pointer"
+                  >
                     <span className="w-5 text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
                     <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="violet" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition">
+                        {u.name}
+                      </p>
                       <p className="text-xs text-slate-400 truncate">{u.email}</p>
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
@@ -1366,7 +1406,7 @@ export default function DashboardPage() {
                       ))}
                       <span className="ml-1.5 text-xs font-semibold text-slate-500">{u.activeDaysLast7}/7</span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -1375,7 +1415,7 @@ export default function DashboardPage() {
           {/* Recently Active Students */}
           <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
             <div className="px-5 pt-5 pb-3 border-b border-slate-100">
-              <SectionHeader title="Recently Active Students" icon={Zap} sub="Real-time activity from latest sessions" />
+              <SectionHeader title="Recently Active Students" icon={Zap} sub="Real-time activity from latest sessions · click student to view profile" />
             </div>
             {loading ? (
               <div className="p-5 space-y-3">
@@ -1389,19 +1429,175 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
                 {(metrics?.recentUsers ?? []).map((u) => (
-                  <div key={u.userId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition">
+                  <Link
+                    key={u.userId}
+                    href={`/users/${u.userId}`}
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition group cursor-pointer"
+                  >
                     <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
+                      <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition">
+                        {u.name}
+                      </p>
                       <p className="text-xs text-slate-400 truncate">{u.subject} — {u.chapter}</p>
                     </div>
-                    <span className="text-xs text-slate-400 shrink-0">{timeAgo(u.lastSeen)}</span>
-                  </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-slate-400">{timeAgo(u.lastSeen)}</span>
+                      <span className="text-xs text-slate-300 group-hover:text-emerald-600 transition">→</span>
+                    </div>
+                  </Link>
                 ))}
               </div>
             )}
           </div>
         </div>
+
+        {/* ── Row 8: All Registered Students Directory ── */}
+        <section className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <SectionHeader
+                title="All Registered Students"
+                icon={Users}
+                sub={`${allUsers.length} total students on Rookie · click any student to inspect individual performance`}
+              />
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Search */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search student or email…"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-48 sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+                <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+              </div>
+
+              {/* Filter tabs */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                {(["all", "active", "paid", "free", "new"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setUserFilter(tab)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition capitalize ${
+                      userFilter === tab
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {tab === "all" ? "All" : tab === "active" ? "Active" : tab === "paid" ? "Paid" : tab === "free" ? "Free" : "New (<24h)"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {(() => {
+            const filteredUsers = allUsers.filter((u) => {
+              if (userSearch) {
+                const q = userSearch.toLowerCase();
+                const matches = u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.userId.toLowerCase().includes(q);
+                if (!matches) return false;
+              }
+              if (userFilter === "active") return u.totalAttempts > 0;
+              if (userFilter === "paid") return u.isPaid;
+              if (userFilter === "free") return !u.isPaid;
+              if (userFilter === "new") return u.isNew;
+              return true;
+            });
+
+            if (filteredUsers.length === 0) {
+              return (
+                <div className="p-12 text-center text-slate-400">
+                  <Users size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm font-medium">No students match your search</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 uppercase text-[10px] sticky top-0 z-10">
+                    <tr>
+                      <th className="py-2.5 px-5">Student</th>
+                      <th className="py-2.5 px-3">Class &amp; Exam</th>
+                      <th className="py-2.5 px-3 text-center">Questions Attempted</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Last Active</th>
+                      <th className="py-2.5 px-5 text-right">Registered</th>
+                      <th className="py-2.5 px-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredUsers.slice(0, 150).map((u) => (
+                      <tr key={u.userId} className="hover:bg-slate-50/80 transition">
+                        <td className="py-3 px-5">
+                          <Link href={`/users/${u.userId}`} className="flex items-center gap-2.5 group">
+                            <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                            <div className="min-w-0 max-w-[200px]">
+                              <p className="font-semibold text-slate-900 truncate group-hover:text-emerald-700 transition">
+                                {u.name}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="text-slate-700 font-medium">{u.class}</span>
+                          <span className="text-[11px] text-slate-400 block">{u.exam}</span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`font-bold tabular-nums text-sm ${u.totalAttempts > 0 ? "text-slate-900" : "text-slate-300"}`}>
+                            {u.totalAttempts}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          {u.isPaid ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
+                              <Crown size={10} className="text-amber-500 fill-amber-500" />
+                              Paid Pass
+                            </span>
+                          ) : u.isNew ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold text-[10px] bg-sky-100 text-sky-800">
+                              New (&lt;24h)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium text-[10px] bg-slate-100 text-slate-600">
+                              Free User
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                          {timeAgo(u.lastSeen)}
+                        </td>
+                        <td className="py-3 px-5 text-right text-slate-400 whitespace-nowrap">
+                          {new Date(u.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Link
+                            href={`/users/${u.userId}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-[11px] transition"
+                          >
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </section>
 
         {/* ── Footer ── */}
         <footer className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 pb-4 pt-2 border-t border-slate-200">

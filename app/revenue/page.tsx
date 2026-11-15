@@ -6,7 +6,7 @@ import {
   DollarSign, TrendingUp, Users, CreditCard,
   BarChart2, RefreshCw, ArrowUpRight, ArrowDownRight,
   Minus, ShoppingCart, CheckCircle, MousePointerClick, Crown,
-  Clock, HelpCircle, FileText, Sparkles,
+  Clock, HelpCircle, FileText, Sparkles, Search, Filter, AlertCircle, Eye,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +35,34 @@ export interface MultiCheckoutUser {
   status: "paid" | "abandoned";
   planId: string;
   lastCheckoutAt: string;
+}
+
+export interface CheckoutDirectoryUser {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  checkoutCount: number;
+  isPaid: boolean;
+  status: "paid" | "abandoned";
+  planId: string;
+  lastCheckoutAt: string;
+  lastAmount: number;
+}
+
+export interface CheckoutEvent {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  planId: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+  userCheckoutCount: number;
+  isPaidUser: boolean;
 }
 
 interface RevenueData {
@@ -80,6 +108,16 @@ interface RevenueData {
     convertedCount: number;
     abandonedCount: number;
     users: MultiCheckoutUser[];
+  };
+  checkoutDirectory?: {
+    totalCheckouts: number;
+    totalUsers: number;
+    singleClickUsersCount: number;
+    multiClickUsersCount: number;
+    convertedCount: number;
+    abandonedCount: number;
+    users: CheckoutDirectoryUser[];
+    allEvents: CheckoutEvent[];
   };
   error?: string;
 }
@@ -243,6 +281,11 @@ export default function RevenuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
+  // ── Checkout directory filters & search ──────────────────────────────────
+  const [checkoutFilter, setCheckoutFilter] = useState<"all" | "single" | "multi" | "paid" | "abandoned">("all");
+  const [checkoutView, setCheckoutView] = useState<"users" | "events">("users");
+  const [checkoutSearch, setCheckoutSearch] = useState<string>("");
+
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
@@ -266,6 +309,32 @@ export default function RevenuePage() {
 
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  const filteredCheckoutUsers = (data?.checkoutDirectory?.users ?? []).filter((u) => {
+    if (checkoutSearch.trim()) {
+      const q = checkoutSearch.toLowerCase();
+      const match = u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.userId.toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (checkoutFilter === "single") return u.checkoutCount === 1;
+    if (checkoutFilter === "multi") return u.checkoutCount > 1;
+    if (checkoutFilter === "paid") return u.isPaid;
+    if (checkoutFilter === "abandoned") return !u.isPaid;
+    return true;
+  });
+
+  const filteredCheckoutEvents = (data?.checkoutDirectory?.allEvents ?? []).filter((e) => {
+    if (checkoutSearch.trim()) {
+      const q = checkoutSearch.toLowerCase();
+      const match = e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || e.id.toLowerCase().includes(q) || e.userId.toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (checkoutFilter === "single") return e.userCheckoutCount === 1;
+    if (checkoutFilter === "multi") return e.userCheckoutCount > 1;
+    if (checkoutFilter === "paid") return e.status === "paid" || e.isPaidUser;
+    if (checkoutFilter === "abandoned") return e.status !== "paid" && !e.isPaidUser;
+    return true;
   });
 
   return (
@@ -488,7 +557,9 @@ export default function RevenuePage() {
                       <CheckCircle size={13} className="text-emerald-600" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{p.name || `#${p.id}…`}</p>
+                      <Link href={`/users/${p.userId}`} className="text-xs font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block">
+                        {p.name || `#${p.id}…`}
+                      </Link>
                       <p className="text-[11px] text-slate-400">{p.email ? `${p.email} · ` : ""}{timeAgo(p.paidAt)}</p>
                     </div>
                     <span className="text-sm font-bold text-slate-900 shrink-0">{fmt(p.amount)}</span>
@@ -643,7 +714,12 @@ export default function RevenuePage() {
                               </div>
                             )}
                             <div className="min-w-0 max-w-[160px]">
-                              <p className="font-semibold text-slate-800 truncate">{u.name}</p>
+                              <Link
+                                href={`/users/${u.userId}`}
+                                className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block"
+                              >
+                                {u.name}
+                              </Link>
                               <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
                             </div>
                           </div>
@@ -695,111 +771,367 @@ export default function RevenuePage() {
         </section>
 
         {/* ══════════════════════════════════════════════════════════════════
-            SECTION — Multiple Checkout Openers (Item 3)
-            Users who opened checkout multiple times + status
+            SECTION — All Checkout Sessions & Purchase Intent Directory
+            Shows all list of checkouts happened arranged as most recent first,
+            data like clicked 1 time or 2 times etc., and list of users with
+            links to individual student profiles.
         ══════════════════════════════════════════════════════════════════ */}
         <section className={`${CARD} p-6 space-y-5`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <ShoppingCart size={16} className="text-indigo-500" />
+                <ShoppingCart size={18} className="text-indigo-600" />
                 <h2 className="text-base font-bold text-slate-900">
-                  Multiple Checkout Openers (High Purchase Intent)
+                  All Checkouts & Purchase Intent Directory
                 </h2>
               </div>
               <p className="text-xs text-slate-500">
-                Students who opened the payment modal 2 or more times
+                Arranged as most recent first · shows all checkout clicks (1 time, 2+ times) and users with links to inspect individual profiles
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
-                {data?.multipleCheckoutOpeners?.totalMultiOpeners ?? 0} multi-openers
-              </span>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                {data?.multipleCheckoutOpeners?.convertedCount ?? 0} paid
-              </span>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
-                {data?.multipleCheckoutOpeners?.abandonedCount ?? 0} abandoned
-              </span>
+
+            {/* View Mode Switcher */}
+            <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+              <button
+                onClick={() => setCheckoutView("users")}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                  checkoutView === "users"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                By Student ({data?.checkoutDirectory?.totalUsers ?? 0})
+              </button>
+              <button
+                onClick={() => setCheckoutView("events")}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                  checkoutView === "events"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Live Feed ({data?.checkoutDirectory?.totalCheckouts ?? 0} Checkouts)
+              </button>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">User</th>
-                  <th className="px-3 py-3 font-semibold">Times Opened</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">Target Plan</th>
-                  <th className="px-3 py-3 font-semibold text-right">Last Checkout Opened</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {loading ? (
+          {/* KPI Chips */}
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
+            <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Total Checkouts</span>
+              <p className="text-lg font-bold text-slate-900 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.totalCheckouts ?? 0)}</p>
+              <span className="text-[10px] text-slate-400">modal opened</span>
+            </div>
+            <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Unique Shoppers</span>
+              <p className="text-lg font-bold text-indigo-700 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.totalUsers ?? 0)}</p>
+              <span className="text-[10px] text-slate-400">students</span>
+            </div>
+            <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Clicked 1 Time</span>
+              <p className="text-lg font-bold text-slate-700 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.singleClickUsersCount ?? 0)}</p>
+              <span className="text-[10px] text-slate-400">first-time interest</span>
+            </div>
+            <div className="p-3 rounded-xl border border-indigo-100 bg-indigo-50/50">
+              <span className="text-[11px] font-medium text-indigo-700 block">Clicked 2+ Times</span>
+              <p className="text-lg font-bold text-indigo-900 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.multiClickUsersCount ?? 0)}</p>
+              <span className="text-[10px] text-indigo-500 font-medium">high purchase intent</span>
+            </div>
+            <div className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50">
+              <span className="text-[11px] font-medium text-emerald-700 block">Converted (Paid)</span>
+              <p className="text-lg font-bold text-emerald-800 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.convertedCount ?? 0)}</p>
+              <span className="text-[10px] text-emerald-600 font-medium">active pass holders</span>
+            </div>
+            <div className="p-3 rounded-xl border border-amber-100 bg-amber-50/50">
+              <span className="text-[11px] font-medium text-amber-700 block">Abandoned Leads</span>
+              <p className="text-lg font-bold text-amber-800 mt-0.5">{loading ? "—" : (data?.checkoutDirectory?.abandonedCount ?? 0)}</p>
+              <span className="text-[10px] text-amber-600 font-medium">follow-up pipeline</span>
+            </div>
+          </div>
+
+          {/* Filter Bar & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-slate-400 text-[11px] font-medium mr-1 flex items-center gap-1">
+                <Filter size={12} /> Filter:
+              </span>
+              {(
+                [
+                  { id: "all", label: `All (${checkoutView === "users" ? (data?.checkoutDirectory?.totalUsers ?? 0) : (data?.checkoutDirectory?.totalCheckouts ?? 0)})` },
+                  { id: "single", label: `Clicked 1 Time (${data?.checkoutDirectory?.singleClickUsersCount ?? 0})` },
+                  { id: "multi", label: `Clicked 2+ Times (${data?.checkoutDirectory?.multiClickUsersCount ?? 0})` },
+                  { id: "paid", label: `Paid Customers (${data?.checkoutDirectory?.convertedCount ?? 0})` },
+                  { id: "abandoned", label: `Abandoned Leads (${data?.checkoutDirectory?.abandonedCount ?? 0})` },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setCheckoutFilter(tab.id)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition ${
+                    checkoutFilter === tab.id
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Search Box */}
+            <div className="relative shrink-0 sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder={checkoutView === "users" ? "Search student name or email…" : "Search name, email, or order ID…"}
+                value={checkoutSearch}
+                onChange={(e) => setCheckoutSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              {checkoutSearch && (
+                <button
+                  onClick={() => setCheckoutSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
+          {checkoutView === "users" ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                      Loading multi-checkout users…
-                    </td>
+                    <th className="px-4 py-3 font-semibold">Student</th>
+                    <th className="px-3 py-3 font-semibold text-center">Times Clicked / Opened</th>
+                    <th className="px-3 py-3 font-semibold">Purchase Status</th>
+                    <th className="px-3 py-3 font-semibold">Target Plan</th>
+                    <th className="px-3 py-3 font-semibold text-right">Last Checkout Opened</th>
+                    <th className="px-4 py-3 font-semibold text-right">Inspect</th>
                   </tr>
-                ) : (data?.multipleCheckoutOpeners?.users ?? []).length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                      No multiple checkout openers recorded yet
-                    </td>
-                  </tr>
-                ) : (
-                  (data?.multipleCheckoutOpeners?.users ?? []).map((u) => (
-                    <tr key={u.userId} className="hover:bg-slate-50 transition">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          {u.avatarUrl ? (
-                            <img
-                              src={u.avatarUrl}
-                              alt={u.name}
-                              className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                              {getInitials(u.name, u.email)}
-                            </div>
-                          )}
-                          <div className="min-w-0 max-w-[200px]">
-                            <p className="font-semibold text-slate-800 truncate">{u.name}</p>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {u.checkoutCount}× opened
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        {u.isPaid ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Paid Customer
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                            Abandoned (Follow Up)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-slate-600 font-mono text-[11px]">
-                        {u.planId}
-                      </td>
-                      <td className="px-3 py-3 text-right text-slate-400 whitespace-nowrap">
-                        {timeAgo(u.lastCheckoutAt)}
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        Loading checkout directory…
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : filteredCheckoutUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                        No students match the current filter or search
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCheckoutUsers.map((u) => (
+                      <tr key={u.userId} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            {u.avatarUrl ? (
+                              <img
+                                src={u.avatarUrl}
+                                alt={u.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {getInitials(u.name, u.email)}
+                              </div>
+                            )}
+                            <div className="min-w-0 max-w-[200px]">
+                              <Link
+                                href={`/users/${u.userId}`}
+                                className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block"
+                              >
+                                {u.name}
+                              </Link>
+                              <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              u.checkoutCount >= 6
+                                ? "bg-purple-100 text-purple-800 border border-purple-200"
+                                : u.checkoutCount >= 3
+                                ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                : u.checkoutCount === 2
+                                ? "bg-sky-50 text-sky-700 border border-sky-200"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
+                            }`}
+                          >
+                            {u.checkoutCount}× {u.checkoutCount === 1 ? "clicked" : "opened"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          {u.isPaid ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Paid Customer
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              Abandoned Lead
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-semibold text-slate-800">₹{u.lastAmount || 399}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono truncate max-w-[150px]">
+                            {u.planId}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right text-slate-400 whitespace-nowrap">
+                          <span className="font-medium text-slate-700 block">{timeAgo(u.lastCheckoutAt)}</span>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(u.lastCheckoutAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/users/${u.userId}`}
+                            className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline text-xs"
+                          >
+                            Profile →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Time (Recent First)</th>
+                    <th className="px-4 py-3 font-semibold">Student</th>
+                    <th className="px-3 py-3 font-semibold text-center">User Intent</th>
+                    <th className="px-3 py-3 font-semibold">Amount & Plan</th>
+                    <th className="px-3 py-3 font-semibold">Order Status</th>
+                    <th className="px-3 py-3 font-semibold font-mono">Order ID</th>
+                    <th className="px-4 py-3 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                        Loading checkout events…
+                      </td>
+                    </tr>
+                  ) : filteredCheckoutEvents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                        No checkout events match the current filter or search
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCheckoutEvents.map((e) => (
+                      <tr key={e.id} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800 block">{timeAgo(e.createdAt)}</span>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(e.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            {e.avatarUrl ? (
+                              <img
+                                src={e.avatarUrl}
+                                alt={e.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {getInitials(e.name, e.email)}
+                              </div>
+                            )}
+                            <div className="min-w-0 max-w-[180px]">
+                              {e.userId ? (
+                                <Link
+                                  href={`/users/${e.userId}`}
+                                  className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block"
+                                >
+                                  {e.name}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold text-slate-800 truncate">{e.name}</p>
+                              )}
+                              <p className="text-[11px] text-slate-400 truncate">{e.email || (e.userId ? e.userId.slice(0, 8) : "—")}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              e.userCheckoutCount > 1
+                                ? "bg-indigo-50 text-indigo-700 border border-indigo-100"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {e.userCheckoutCount}× Total Clicks
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="font-bold text-slate-900">₹{e.amount}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono truncate max-w-[120px]">
+                            {e.planId}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          {e.status === "paid" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Paid
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                              Created (Abandoned)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-[11px] text-slate-500">
+                          {e.id.slice(0, 8)}…
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {e.userId && (
+                            <Link
+                              href={`/users/${e.userId}`}
+                              className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline text-xs"
+                            >
+                              Inspect →
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {/* ── Footer ── */}

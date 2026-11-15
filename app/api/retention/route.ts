@@ -5,16 +5,12 @@
  *   ?interval=daily | weekly | monthly (default: daily)
  *   ?segment=all | free | paid         (default: all)
  *
- * Returns:
- *   - cohortTable & rolling averages for chosen interval & segment
- *   - neverReturnedAfterUsing: drop-off after 1st product use
- *   - neverReturnedAfterSignup: drop-off after signup (0 activity or day-1 bounce)
- *   - repeatPlatformUsage: repeat days distribution
- *   - monthlyRetention & topRetainedUsers
+ * Built on append-only public.attempts data (with pagination so all rows are fetched).
+ * Evaluates drop-offs with 24-hour rule to eliminate false positives for brand-new signups.
  */
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
-import { getUserProfiles, UserProfile } from "@/lib/getUserProfiles";
+import { getUserProfiles } from "@/lib/getUserProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +23,22 @@ function getWeekKey(isoDate: string): string {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
-function getWeekStart(isoDate: string): Date {
-  const d = new Date(isoDate);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust to Monday
-  const monday = new Date(d.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+async function fetchAllAttempts(sb: ReturnType<typeof createServerSupabaseClient>) {
+  const PAGE_SIZE = 1000;
+  let all: { id: number; student_id: string; created_at: string; correct: boolean; time_taken_sec: number }[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from("attempts")
+      .select("id, student_id, created_at, correct, time_taken_sec")
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error || !data || data.length === 0) break;
+    all = all.concat(data as any);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return all;
 }
 
 export async function GET(req: NextRequest) {
@@ -43,26 +48,22 @@ export async function GET(req: NextRequest) {
     const interval = (searchParams.get("interval") ?? "daily").toLowerCase(); // daily | weekly | monthly
     const segment = (searchParams.get("segment") ?? "all").toLowerCase();     // all | free | paid
 
-    // ── 1. Fetch data in parallel ─────────────────────────────────────────────
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000);
-    ninetyDaysAgo.setHours(0, 0, 0, 0);
+    const nowTime = Date.now();
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-    const [actRes, entRes, ordersRes, usersRes] = await Promise.all([
+    // ── 1. Fetch data in parallel ─────────────────────────────────────────────
+    const [allAttempts, actRes, entRes, ordersRes, usersRes] = await Promise.all([
+      fetchAllAttempts(sb),
       sb
         .from("user_activity")
         .select("user_id, answered_at, chapter_title, subject_name")
-        .gte("answered_at", ninetyDaysAgo.toISOString())
-        .not("user_id", "is", null)
-        .limit(100000),
-
+        .limit(50000),
       sb.from("entitlements").select("user_id, access_until"),
       sb.from("orders").select("user_id, status"),
       sb.auth.admin.listUsers({ perPage: 1000 }),
     ]);
 
-    if (actRes.error) throw new Error(actRes.error.message);
-
-    const rawRows = actRes.data ?? [];
+    const rawActivity = actRes.data ?? [];
     const authUsers = usersRes.data?.users ?? [];
 
     // ── 2. Identify paid vs free users ───────────────────────────────────────
@@ -75,25 +76,33 @@ export async function GET(req: NextRequest) {
       if (o.status === "paid") paidUserIds.add(o.user_id as string);
     });
 
-    // Filter rows by segment
-    const rows = rawRows.filter((r) => {
-      const uid = r.user_id as string;
-      if (segment === "paid") return paidUserIds.has(uid);
-      if (segment === "free") return !paidUserIds.has(uid);
-      return true;
-    });
-
-    // ── 3. Build per-user calendar activity ──────────────────────────────────
+    // ── 3. Build per-user calendar activity from append-only attempts ────────
     const userDays = new Map<string, Set<string>>();
     const userWeeks = new Map<string, Set<string>>();
     const userMonths = new Map<string, Set<string>>();
     const userQuestionsCount = new Map<string, number>();
+    const userFirstActivity = new Map<string, string>();
     const userLastActivity = new Map<string, string>();
     const userFirstChapter = new Map<string, string>();
 
-    rows.forEach((r) => {
+    // Index chapter titles from user_activity for display
+    const userChapterMap = new Map<string, string>();
+    rawActivity.forEach((r) => {
       const uid = r.user_id as string;
-      const ts = r.answered_at as string;
+      if (uid && r.chapter_title && !userChapterMap.has(uid)) {
+        userChapterMap.set(uid, `${r.subject_name ?? ""} · ${r.chapter_title}`);
+      }
+    });
+
+    // Process attempts (append-only)
+    allAttempts.forEach((a) => {
+      const uid = a.student_id;
+      if (!uid) return;
+
+      if (segment === "paid" && !paidUserIds.has(uid)) return;
+      if (segment === "free" && paidUserIds.has(uid)) return;
+
+      const ts = a.created_at;
       const day = ts.slice(0, 10);
       const week = getWeekKey(ts);
       const month = ts.slice(0, 7);
@@ -109,6 +118,41 @@ export async function GET(req: NextRequest) {
 
       userQuestionsCount.set(uid, (userQuestionsCount.get(uid) ?? 0) + 1);
 
+      if (!userFirstActivity.has(uid) || ts < userFirstActivity.get(uid)!) {
+        userFirstActivity.set(uid, ts);
+      }
+      if (!userLastActivity.has(uid) || ts > userLastActivity.get(uid)!) {
+        userLastActivity.set(uid, ts);
+      }
+      if (userChapterMap.has(uid) && !userFirstChapter.has(uid)) {
+        userFirstChapter.set(uid, userChapterMap.get(uid)!);
+      }
+    });
+
+    // Also include user_activity rows if any were not recorded in attempts
+    rawActivity.forEach((r) => {
+      const uid = r.user_id as string;
+      if (!uid) return;
+      if (segment === "paid" && !paidUserIds.has(uid)) return;
+      if (segment === "free" && paidUserIds.has(uid)) return;
+
+      const ts = r.answered_at as string;
+      const day = ts.slice(0, 10);
+      const week = getWeekKey(ts);
+      const month = ts.slice(0, 7);
+
+      if (!userDays.has(uid)) userDays.set(uid, new Set());
+      userDays.get(uid)!.add(day);
+
+      if (!userWeeks.has(uid)) userWeeks.set(uid, new Set());
+      userWeeks.get(uid)!.add(week);
+
+      if (!userMonths.has(uid)) userMonths.set(uid, new Set());
+      userMonths.get(uid)!.add(month);
+
+      if (!userFirstActivity.has(uid) || ts < userFirstActivity.get(uid)!) {
+        userFirstActivity.set(uid, ts);
+      }
       if (!userLastActivity.has(uid) || ts > userLastActivity.get(uid)!) {
         userLastActivity.set(uid, ts);
       }
@@ -117,31 +161,42 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // ── 4. Never returned after using product ────────────────────────────────
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // ── 4. Never returned after using product (Fix: 24h rule) ────────────────
     const dropoffProductUserIds: string[] = [];
     let neverReturnedAfterUsingCount = 0;
 
     userDays.forEach((days, uid) => {
       if (days.size === 1) {
-        const onlyDay = [...days][0];
-        if (onlyDay < todayStr) {
-          neverReturnedAfterUsingCount++;
-          dropoffProductUserIds.push(uid);
+        const firstAct = userFirstActivity.get(uid);
+        if (firstAct) {
+          const firstActTime = new Date(firstAct).getTime();
+          // Only flag as drop-off if first activity was MORE than 24 hours ago!
+          // New users from today or within the last 24h are active in current cohort.
+          if (nowTime - firstActTime >= ONE_DAY_MS) {
+            neverReturnedAfterUsingCount++;
+            dropoffProductUserIds.push(uid);
+          }
         }
       }
+    });
+
+    // Sort drop-offs most recent first
+    dropoffProductUserIds.sort((a, b) => {
+      const tA = userLastActivity.get(a) ?? "";
+      const tB = userLastActivity.get(b) ?? "";
+      return tB.localeCompare(tA);
     });
 
     const totalProductUsers = userDays.size;
     const returnedProductUsers = Math.max(0, totalProductUsers - neverReturnedAfterUsingCount);
 
-    // ── 5. Never returned after sign up ──────────────────────────────────────
+    // ── 5. Never returned after sign up (Fix: 24h rule to eliminate false positives) ──
     let neverReturnedAfterSignupCount = 0;
     let zeroActivityAfterSignupCount = 0;
     let day1OnlyAfterSignupCount = 0;
+    let newSignupsUnder24hCount = 0;
     const dropoffSignupUserIds: string[] = [];
 
-    // Filter authUsers by segment if needed
     const relevantAuthUsers = authUsers.filter((u) => {
       if (segment === "paid") return paidUserIds.has(u.id);
       if (segment === "free") return !paidUserIds.has(u.id);
@@ -149,23 +204,38 @@ export async function GET(req: NextRequest) {
     });
 
     relevantAuthUsers.forEach((u) => {
-      const signupDay = u.created_at.slice(0, 10);
-      if (signupDay >= todayStr) return; // created today, still has time
+      const signupTime = new Date(u.created_at).getTime();
+      const ageMs = nowTime - signupTime;
+
+      // Brand new signups (< 24 hours old) are NOT drop-offs!
+      if (ageMs < ONE_DAY_MS) {
+        newSignupsUnder24hCount++;
+        return;
+      }
 
       const days = userDays.get(u.id);
       if (!days || days.size === 0) {
+        // True zero-activity: Account older than 24h with 0 questions attempted
         neverReturnedAfterSignupCount++;
         zeroActivityAfterSignupCount++;
         dropoffSignupUserIds.push(u.id);
-      } else if (days.size === 1 && days.has(signupDay)) {
+      } else if (days.size === 1) {
+        // Day 1 bounce: Account older than 24h with activity only on day 1
         neverReturnedAfterSignupCount++;
         day1OnlyAfterSignupCount++;
         dropoffSignupUserIds.push(u.id);
       }
     });
 
-    const totalSignups = relevantAuthUsers.length;
-    const returnedAfterSignupCount = Math.max(0, totalSignups - neverReturnedAfterSignupCount);
+    // Sort signup drop-offs most recent first
+    dropoffSignupUserIds.sort((a, b) => {
+      const uA = relevantAuthUsers.find((x) => x.id === a);
+      const uB = relevantAuthUsers.find((x) => x.id === b);
+      return (uB?.created_at ?? "").localeCompare(uA?.created_at ?? "");
+    });
+
+    const evaluatedSignups = Math.max(1, relevantAuthUsers.length - newSignupsUnder24hCount);
+    const returnedAfterSignupCount = Math.max(0, evaluatedSignups - neverReturnedAfterSignupCount);
 
     // ── 6. Repeat Platform Usage Distribution ────────────────────────────────
     const distBuckets = {
@@ -203,7 +273,6 @@ export async function GET(req: NextRequest) {
     if (interval === "weekly") {
       headers = ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"];
 
-      // User first week
       const firstWeek = new Map<string, string>();
       userWeeks.forEach((weeks, uid) => {
         const sorted = [...weeks].sort();
@@ -216,7 +285,6 @@ export async function GET(req: NextRequest) {
         weeklyCohorts.get(w)!.add(uid);
       });
 
-      // Last 12 weeks
       const sortedWeeks = [...weeklyCohorts.keys()].sort().slice(-12);
       const currentWeekKey = getWeekKey(today.toISOString());
 
@@ -224,7 +292,6 @@ export async function GET(req: NextRequest) {
         const cohort = weeklyCohorts.get(wKey);
         if (!cohort || cohort.size === 0) continue;
 
-        // Parse year & week
         const [yearStr, wPart] = wKey.split("-W");
         const yr = parseInt(yearStr, 10);
         const wk = parseInt(wPart, 10);
@@ -347,7 +414,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Rolling Dn / Wn / Mn
+    // Rolling averages
     const colCount = headers.length;
     const rollingDn: (number | null)[] = Array.from({ length: colCount }, (_, n) => {
       const observable = cohortTable.filter((row) => row.dn[n] !== null);
@@ -358,17 +425,19 @@ export async function GET(req: NextRequest) {
     });
 
     // ── 8. Monthly Retention (Standard) ──────────────────────────────────────
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 10);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().slice(0, 10);
 
     const lastMonthSet = new Set<string>();
     const thisMonthSet = new Set<string>();
 
-    rows.forEach((r) => {
-      const d = (r.answered_at as string).slice(0, 10);
-      const uid = r.user_id as string;
+    allAttempts.forEach((a) => {
+      const d = a.created_at.slice(0, 10);
+      const uid = a.student_id;
+      if (!uid) return;
+      if (segment === "paid" && !paidUserIds.has(uid)) return;
+      if (segment === "free" && paidUserIds.has(uid)) return;
       if (d >= lastMonthStart && d <= lastMonthEnd) lastMonthSet.add(uid);
       if (d >= thisMonthStart) thisMonthSet.add(uid);
     });
@@ -384,15 +453,14 @@ export async function GET(req: NextRequest) {
       if (recentDays >= 5) highRetentionUids.push(uid);
     });
 
-    // Pick top dropoff users to enrich
     const dropoffSampleUids = [
-      ...dropoffProductUserIds.slice(0, 15),
-      ...dropoffSignupUserIds.slice(0, 15),
-      ...highRetentionUids.slice(0, 20),
+      ...dropoffProductUserIds.slice(0, 30),
+      ...dropoffSignupUserIds.slice(0, 30),
+      ...highRetentionUids.slice(0, 25),
     ];
     const profileMap = await getUserProfiles([...new Set(dropoffSampleUids)]);
 
-    const topRetainedUsers = highRetentionUids.slice(0, 20).map((uid) => {
+    const topRetainedUsers = highRetentionUids.slice(0, 25).map((uid) => {
       const p = profileMap.get(uid);
       const days = [...(userDays.get(uid) ?? [])].filter((d) => d >= sevenDaysAgoStr).length;
       return {
@@ -405,7 +473,7 @@ export async function GET(req: NextRequest) {
       };
     }).sort((a, b) => b.activeDaysLast7 - a.activeDaysLast7);
 
-    const neverReturnedProductUsersSample = dropoffProductUserIds.slice(0, 15).map((uid) => {
+    const neverReturnedProductUsersSample = dropoffProductUserIds.slice(0, 30).map((uid) => {
       const p = profileMap.get(uid);
       const days = [...(userDays.get(uid) ?? [])];
       return {
@@ -420,7 +488,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const neverReturnedSignupUsersSample = dropoffSignupUserIds.slice(0, 15).map((uid) => {
+    const neverReturnedSignupUsersSample = dropoffSignupUserIds.slice(0, 30).map((uid) => {
       const p = profileMap.get(uid);
       const authUser = authUsers.find((u) => u.id === uid);
       const days = userDays.get(uid);
@@ -458,17 +526,18 @@ export async function GET(req: NextRequest) {
         sampleUsers: neverReturnedProductUsersSample,
       },
 
-      // Item 2: Students who never returned after signup
+      // Item 2: Students who never returned after signup (with 24h grace period)
       neverReturnedAfterSignup: {
-        totalSignups,
+        totalSignups: evaluatedSignups,
+        newSignupsUnder24h: newSignupsUnder24hCount,
         neverReturnedCount: neverReturnedAfterSignupCount,
-        neverReturnedPct: totalSignups > 0 ? Math.round((neverReturnedAfterSignupCount / totalSignups) * 100) : 0,
+        neverReturnedPct: evaluatedSignups > 0 ? Math.round((neverReturnedAfterSignupCount / evaluatedSignups) * 100) : 0,
         zeroActivityCount: zeroActivityAfterSignupCount,
-        zeroActivityPct: totalSignups > 0 ? Math.round((zeroActivityAfterSignupCount / totalSignups) * 100) : 0,
+        zeroActivityPct: evaluatedSignups > 0 ? Math.round((zeroActivityAfterSignupCount / evaluatedSignups) * 100) : 0,
         day1OnlyCount: day1OnlyAfterSignupCount,
-        day1OnlyPct: totalSignups > 0 ? Math.round((day1OnlyAfterSignupCount / totalSignups) * 100) : 0,
+        day1OnlyPct: evaluatedSignups > 0 ? Math.round((day1OnlyAfterSignupCount / evaluatedSignups) * 100) : 0,
         returnedCount: returnedAfterSignupCount,
-        returnedPct: totalSignups > 0 ? Math.round((returnedAfterSignupCount / totalSignups) * 100) : 0,
+        returnedPct: evaluatedSignups > 0 ? Math.round((returnedAfterSignupCount / evaluatedSignups) * 100) : 0,
         sampleUsers: neverReturnedSignupUsersSample,
       },
 
