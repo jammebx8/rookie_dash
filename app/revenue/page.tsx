@@ -6,7 +6,8 @@ import {
   DollarSign, TrendingUp, Users, CreditCard,
   BarChart2, RefreshCw, ArrowUpRight, ArrowDownRight,
   Minus, ShoppingCart, CheckCircle, MousePointerClick, Crown,
-  Clock, HelpCircle, FileText, Sparkles, Search, Filter, AlertCircle, Eye,
+  Clock, HelpCircle, FileText, Sparkles, Search, Filter, AlertCircle, Eye, Zap,
+  X, Tag, Key,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +36,10 @@ export interface MultiCheckoutUser {
   status: "paid" | "abandoned";
   planId: string;
   lastCheckoutAt: string;
+  currentPrice?: number;
+  saleType?: "custom" | "welcome" | "none";
+  saleHoursLeft?: number;
+  saleExpiresAt?: string | null;
 }
 
 export interface CheckoutDirectoryUser {
@@ -48,6 +53,10 @@ export interface CheckoutDirectoryUser {
   planId: string;
   lastCheckoutAt: string;
   lastAmount: number;
+  currentPrice?: number;
+  saleType?: "custom" | "welcome" | "none";
+  saleHoursLeft?: number;
+  saleExpiresAt?: string | null;
 }
 
 export interface CheckoutEvent {
@@ -122,7 +131,7 @@ interface RevenueData {
   error?: string;
 }
 
-const CARD = "bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]";
+const CARD = "bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number) {
@@ -286,6 +295,64 @@ export default function RevenuePage() {
   const [checkoutView, setCheckoutView] = useState<"users" | "events">("users");
   const [checkoutSearch, setCheckoutSearch] = useState<string>("");
 
+  // ── Custom sale modal state ───────────────────────────────────────────────
+  const [saleTarget, setSaleTarget] = useState<{ userId: string; name: string; email: string } | null>(null);
+  const [salePrice, setSalePrice] = useState("399");
+  const [saleHours, setSaleHours] = useState("24");
+  const [saleReason, setSaleReason] = useState("");
+  const [salePassword, setSalePassword] = useState("");
+  const [saleSubmitting, setSaleSubmitting] = useState(false);
+  const [saleToast, setSaleToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const openSaleModal = (userId: string, name: string, email: string) => {
+    setSaleTarget({ userId, name, email });
+    setSalePrice("399");
+    setSaleHours("24");
+    setSaleReason("");
+    setSalePassword("");
+    setSaleToast(null);
+  };
+
+  const handleGrantSale = async () => {
+    if (!saleTarget) return;
+    if (!salePassword.trim()) {
+      setSaleToast({ type: "error", text: "Please enter the admin password." });
+      return;
+    }
+    setSaleSubmitting(true);
+    setSaleToast(null);
+    try {
+      const res = await fetch("/api/custom-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: saleTarget.userId,
+          customPrice: Number(salePrice),
+          durationHours: Number(saleHours),
+          adminPassword: salePassword,
+          reason: saleReason || `Revenue lead discount: ₹${salePrice} for ${saleHours}h`,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSaleToast({ type: "error", text: json.error || "Failed to activate custom sale" });
+      } else {
+        setSaleToast({
+          type: "success",
+          text: `🎉 Sale active! ₹${salePrice} for ${saleHours}h granted to ${saleTarget.name || saleTarget.email}.`,
+        });
+        setTimeout(() => {
+          setSaleTarget(null);
+          fetchData(true);
+        }, 1200);
+      }
+    } catch (err) {
+      setSaleToast({ type: "error", text: String(err) });
+    } finally {
+      setSaleSubmitting(false);
+    }
+  };
+
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
@@ -338,24 +405,24 @@ export default function RevenuePage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb]">
+    <div className="min-h-screen bg-[#f8f8f7] dark:bg-[#121417] text-[#2e2e2e] dark:text-[#f3f5fa]">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Revenue & Conversions</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{today}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-[#2e2e2e] dark:text-[#f3f5fa]">Revenue &amp; Conversions</h1>
+            <p className="text-xs text-[#736d68] dark:text-[#868c97] mt-1">{today}</p>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            <span className="text-xs text-slate-400">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <span className="text-xs text-[#736d68] dark:text-[#868c97]">
               Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
             </span>
             <Link
               href="/grant-pass"
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition"
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#178a51] hover:text-[#0d3d28] bg-[#dcf5e7] hover:bg-[#b6eacd] dark:bg-emerald-950/70 dark:text-emerald-300 dark:hover:bg-emerald-900/80 px-3 py-1.5 rounded-[8px] transition"
             >
-              <Crown size={13} className="text-amber-500 fill-amber-500" />
+              <Crown size={13} className="text-[#fdba12] fill-[#fdba12]" />
               Grant Pass
             </Link>
             <button
@@ -899,119 +966,260 @@ export default function RevenuePage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table / Mobile Cards */}
           {checkoutView === "users" ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Student</th>
-                    <th className="px-3 py-3 font-semibold text-center">Times Clicked / Opened</th>
-                    <th className="px-3 py-3 font-semibold">Purchase Status</th>
-                    <th className="px-3 py-3 font-semibold">Target Plan</th>
-                    <th className="px-3 py-3 font-semibold text-right">Last Checkout Opened</th>
-                    <th className="px-4 py-3 font-semibold text-right">Inspect</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                        Loading checkout directory…
-                      </td>
-                    </tr>
-                  ) : filteredCheckoutUsers.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                        No students match the current filter or search
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredCheckoutUsers.map((u) => (
-                      <tr key={u.userId} className="hover:bg-slate-50 transition">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            {u.avatarUrl ? (
-                              <img
-                                src={u.avatarUrl}
-                                alt={u.name}
-                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                                {getInitials(u.name, u.email)}
-                              </div>
-                            )}
-                            <div className="min-w-0 max-w-[200px]">
-                              <Link
-                                href={`/users/${u.userId}`}
-                                className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block"
-                              >
-                                {u.name}
-                              </Link>
-                              <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
+            <>
+              {/* Mobile Card View (< sm) */}
+              <div className="sm:hidden divide-y divide-[#ecebe8] dark:divide-white/10 border-t border-[#ecebe8] dark:border-white/10">
+                {loading ? (
+                  <p className="px-4 py-8 text-center text-[#736d68] dark:text-[#868c97] text-xs">
+                    Loading checkout directory…
+                  </p>
+                ) : filteredCheckoutUsers.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-[#736d68] dark:text-[#868c97] text-xs">
+                    No students match the current filter or search
+                  </p>
+                ) : (
+                  filteredCheckoutUsers.map((u) => (
+                    <div key={u.userId} className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {u.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={u.avatarUrl}
+                              alt={u.name}
+                              className="w-8 h-8 rounded-full object-cover shrink-0 border border-[#ecebe8] dark:border-white/10"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#1F75FE] to-[#14593a] text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                              {getInitials(u.name, u.email)}
                             </div>
+                          )}
+                          <div className="min-w-0">
+                            <Link
+                              href={`/users/${u.userId}`}
+                              className="font-semibold text-[13px] text-[#2e2e2e] dark:text-[#f3f5fa] truncate block"
+                            >
+                              {u.name}
+                            </Link>
+                            <p className="text-[11px] text-[#736d68] dark:text-[#868c97] truncate">{u.email || u.userId.slice(0, 8)}</p>
                           </div>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              u.checkoutCount >= 6
-                                ? "bg-purple-100 text-purple-800 border border-purple-200"
-                                : u.checkoutCount >= 3
-                                ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
-                                : u.checkoutCount === 2
-                                ? "bg-sky-50 text-sky-700 border border-sky-200"
-                                : "bg-slate-100 text-slate-600 border border-slate-200"
-                            }`}
-                          >
-                            {u.checkoutCount}× {u.checkoutCount === 1 ? "clicked" : "opened"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-[6px] text-[10px] font-bold shrink-0 ${
+                            u.checkoutCount >= 2
+                              ? "bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300"
+                              : "bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5]"
+                          }`}
+                        >
+                          {u.checkoutCount}× opened
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px]">
+                        <div>
                           {u.isPaid ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              Paid Customer
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300">
+                              <Crown size={10} className="text-[#fdba12] fill-[#fdba12]" /> Paid Pass
+                            </span>
+                          ) : u.saleType === "custom" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300">
+                              <Sparkles size={10} /> ₹{u.currentPrice} ({u.saleHoursLeft}h left)
+                            </span>
+                          ) : u.saleType === "welcome" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/70 dark:text-sky-300">
+                              <Clock size={10} /> ₹399 (60% OFF · {u.saleHoursLeft}h left)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                              Abandoned Lead
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5]">
+                              ₹999 (Sale Expired)
                             </span>
                           )}
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="font-semibold text-slate-800">₹{u.lastAmount || 399}</span>
-                          <span className="block text-[10px] text-slate-400 font-mono truncate max-w-[150px]">
-                            {u.planId}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-right text-slate-400 whitespace-nowrap">
-                          <span className="font-medium text-slate-700 block">{timeAgo(u.lastCheckoutAt)}</span>
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(u.lastCheckoutAt).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/users/${u.userId}`}
-                            className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800 hover:underline text-xs"
+                        </div>
+                        <span className="text-[#736d68] dark:text-[#868c97]">{timeAgo(u.lastCheckoutAt)}</span>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-[#ecebe8]/60 dark:border-white/5">
+                        {!u.isPaid && (
+                          <button
+                            type="button"
+                            onClick={() => openSaleModal(u.userId, u.name, u.email)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[8px] text-[11px] font-semibold bg-[#fff1f4] text-[#ff4f7b] border border-[#f7cdc8] dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900"
                           >
-                            Profile →
-                          </Link>
+                            <Zap size={11} className="fill-current" />
+                            ⚡ Put on Sale
+                          </button>
+                        )}
+                        <Link
+                          href={`/users/${u.userId}`}
+                          className="px-2.5 py-1 rounded-[8px] text-[11px] font-semibold bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-300"
+                        >
+                          Profile →
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Table View (≥ sm) */}
+              <div className="hidden sm:block overflow-x-auto rounded-[12px] border border-[#ecebe8] dark:border-white/10">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#f8f8f7] dark:bg-[#16181c] border-b border-[#ecebe8] dark:border-white/10 text-[#736d68] dark:text-[#868c97] uppercase tracking-wider text-[10px] font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">Student</th>
+                      <th className="px-3 py-3 text-center">Times Opened</th>
+                      <th className="px-3 py-3">Purchase Status</th>
+                      <th className="px-3 py-3">Current Price &amp; Sale Status</th>
+                      <th className="px-3 py-3">Target Plan</th>
+                      <th className="px-3 py-3 text-right">Last Checkout</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10 bg-white dark:bg-[#1b1e22]">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-[#736d68] dark:text-[#868c97]">
+                          Loading checkout directory…
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : filteredCheckoutUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-[#736d68] dark:text-[#868c97]">
+                          No students match the current filter or search
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCheckoutUsers.map((u) => (
+                        <tr key={u.userId} className="hover:bg-[#f8f8f7]/80 dark:hover:bg-white/[0.03] transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              {u.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={u.avatarUrl}
+                                  alt={u.name}
+                                  className="w-7 h-7 rounded-full object-cover shrink-0 border border-[#ecebe8] dark:border-white/10"
+                                />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#1F75FE] to-[#14593a] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  {getInitials(u.name, u.email)}
+                                </div>
+                              )}
+                              <div className="min-w-0 max-w-[200px]">
+                                <Link
+                                  href={`/users/${u.userId}`}
+                                  className="font-semibold text-[#2e2e2e] dark:text-[#f3f5fa] truncate hover:text-[#2a6fb5] dark:hover:text-sky-300 block transition-colors"
+                                >
+                                  {u.name}
+                                </Link>
+                                <p className="text-[11px] text-[#736d68] dark:text-[#868c97] truncate">{u.email || u.userId.slice(0, 8)}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-[6px] text-[11px] font-bold ${
+                                u.checkoutCount >= 6
+                                  ? "bg-[#fff1f4] text-[#ff4f7b] border border-[#f7cdc8] dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800/40"
+                                  : u.checkoutCount >= 3
+                                  ? "bg-[#e3f1ff] text-[#1d4f86] border border-[#c9e5ff] dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/40"
+                                  : u.checkoutCount === 2
+                                  ? "bg-[#e3f1ff] text-[#2a6fb5] border border-[#c9e5ff] dark:bg-sky-950/50 dark:text-sky-400"
+                                  : "bg-[#f1f1ef] text-[#55514e] border border-[#ecebe8] dark:bg-white/10 dark:text-[#b6bbc5] dark:border-white/10"
+                              }`}
+                            >
+                              {u.checkoutCount}× {u.checkoutCount === 1 ? "clicked" : "opened"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            {u.isPaid ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#059669]" />
+                                Paid Customer
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[6px] text-[11px] font-semibold bg-[#fff3c4] text-[#6b4a00] dark:bg-amber-950/70 dark:text-amber-300">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#d97706]" />
+                                Abandoned Lead
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {u.isPaid ? (
+                              <span className="text-[11px] font-semibold text-[#178a51] dark:text-emerald-400">
+                                Active Subscription
+                              </span>
+                            ) : u.saleType === "custom" ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300 w-fit">
+                                  <Sparkles size={10} /> ₹{u.currentPrice} (Custom)
+                                </span>
+                                <span className="text-[10px] text-[#ff4f7b] dark:text-rose-400 font-medium">⚡ {u.saleHoursLeft}h left</span>
+                              </div>
+                            ) : u.saleType === "welcome" ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/70 dark:text-sky-300 w-fit">
+                                  <Clock size={10} /> ₹399 (60% OFF)
+                                </span>
+                                <span className="text-[10px] text-[#2a6fb5] dark:text-sky-400 font-medium">⏱️ {u.saleHoursLeft}h left</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5] w-fit">
+                                  ₹999 (Standard Base)
+                                </span>
+                                <span className="text-[10px] text-[#736d68] dark:text-[#868c97]">Sale expired</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className="font-semibold text-[#2e2e2e] dark:text-[#f3f5fa]">₹{u.lastAmount || 399}</span>
+                            <span className="block text-[10px] text-[#736d68] dark:text-[#868c97] font-mono truncate max-w-[150px]">
+                              {u.planId}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right text-[#736d68] dark:text-[#868c97] whitespace-nowrap">
+                            <span className="font-medium text-[#2e2e2e] dark:text-[#f3f5fa] block">{timeAgo(u.lastCheckoutAt)}</span>
+                            <span className="text-[10px] text-[#736d68] dark:text-[#868c97]">
+                              {new Date(u.lastCheckoutAt).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {!u.isPaid && (
+                                <button
+                                  type="button"
+                                  onClick={() => openSaleModal(u.userId, u.name, u.email)}
+                                  className="inline-flex items-center gap-1 font-semibold text-[#ff4f7b] bg-[#fff1f4] hover:bg-[#fdecea] dark:bg-rose-950/60 dark:text-rose-300 px-2 py-0.5 rounded-[6px] text-[10px] border border-[#f7cdc8] dark:border-rose-900 transition"
+                                  title="Put this lead on custom sale"
+                                >
+                                  <Zap size={10} className="fill-current text-[#ff4f7b]" />
+                                  ⚡ Put on Sale
+                                </button>
+                              )}
+                              <Link
+                                href={`/users/${u.userId}`}
+                                className="inline-flex items-center gap-1 font-semibold text-[#2a6fb5] hover:text-[#1d4f86] dark:text-sky-400 dark:hover:text-sky-300 text-xs transition-colors"
+                              >
+                                Profile →
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-100">
               <table className="w-full text-left text-xs">
@@ -1148,6 +1356,157 @@ export default function RevenuePage() {
             Export CSV
           </a>
         </footer>
+
+        {/* ── Custom Sale Modal ── */}
+        {saleTarget && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-[8px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300">
+                    <Zap size={18} className="fill-current" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-[#1a1918] dark:text-white">Put User on Custom Sale</h3>
+                    <p className="text-xs text-[#736d68] dark:text-[#868c97]">Provide direct discount to this checkout lead</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSaleTarget(null)}
+                  className="p-1 rounded-[6px] text-[#736d68] hover:bg-[#f1f1ef] dark:text-[#868c97] dark:hover:bg-white/10 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* User target card */}
+              <div className="p-3 rounded-[12px] bg-[#f8f8f7] dark:bg-white/5 border border-[#ecebe8] dark:border-white/10 text-xs space-y-1">
+                <div className="font-semibold text-[#1a1918] dark:text-white">{saleTarget.name || "Student"}</div>
+                <div className="text-[#736d68] dark:text-[#868c97] font-mono text-[11px]">{saleTarget.email}</div>
+                <div className="text-[10px] text-[#a8a39d] font-mono truncate">{saleTarget.userId}</div>
+              </div>
+
+              {/* Price selector */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1918] dark:text-white mb-1.5">
+                  Sale Price for Rookie Pass Yearly (₹)
+                </label>
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {["299", "399", "499", "599"].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSalePrice(p)}
+                      className={`h-9 rounded-[8px] text-xs font-bold transition border ${
+                        salePrice === p
+                          ? "bg-[#ff4f7b] text-white border-[#ff4f7b] shadow-sm"
+                          : "bg-white dark:bg-white/5 text-[#2e2e2e] dark:text-white border-[#ecebe8] dark:border-white/10 hover:bg-[#f8f8f7]"
+                      }`}
+                    >
+                      ₹{p}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  value={salePrice}
+                  onChange={(e) => setSalePrice(e.target.value)}
+                  placeholder="Or enter custom price (e.g. 349)"
+                  className="w-full h-10 px-3 rounded-[8px] text-xs border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-[#1a1918] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff4f7b]/40 font-mono"
+                />
+              </div>
+
+              {/* Duration selector */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1918] dark:text-white mb-1.5">
+                  Sale Duration (Hours)
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: "12h", hours: "12" },
+                    { label: "24h (1d)", hours: "24" },
+                    { label: "48h (2d)", hours: "48" },
+                    { label: "72h (3d)", hours: "72" },
+                  ].map((d) => (
+                    <button
+                      key={d.hours}
+                      type="button"
+                      onClick={() => setSaleHours(d.hours)}
+                      className={`h-9 rounded-[8px] text-xs font-bold transition border ${
+                        saleHours === d.hours
+                          ? "bg-[#1F75FE] text-white border-[#1F75FE] shadow-sm"
+                          : "bg-white dark:bg-white/5 text-[#2e2e2e] dark:text-white border-[#ecebe8] dark:border-white/10 hover:bg-[#f8f8f7]"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Admin Password */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1a1918] dark:text-white mb-1.5">
+                  Admin Password
+                </label>
+                <div className="relative">
+                  <Key size={14} className="absolute left-3 top-3 text-[#a8a39d]" />
+                  <input
+                    type="password"
+                    value={salePassword}
+                    onChange={(e) => setSalePassword(e.target.value)}
+                    placeholder="Enter dashboard admin password"
+                    className="w-full h-10 pl-9 pr-3 rounded-[8px] text-xs border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-[#1a1918] dark:text-white focus:outline-none focus:ring-2 focus:ring-[#ff4f7b]/40"
+                  />
+                </div>
+              </div>
+
+              {saleToast && (
+                <div
+                  className={`p-3 rounded-[8px] text-xs font-medium flex items-center gap-2 ${
+                    saleToast.type === "success"
+                      ? "bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300"
+                      : "bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300"
+                  }`}
+                >
+                  <AlertCircle size={14} />
+                  <span>{saleToast.text}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#ecebe8] dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setSaleTarget(null)}
+                  disabled={saleSubmitting}
+                  className="px-4 h-9 rounded-[8px] text-xs font-medium text-[#736d68] hover:bg-[#f1f1ef] dark:text-[#868c97] dark:hover:bg-white/10 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGrantSale}
+                  disabled={saleSubmitting}
+                  className="px-4 h-9 rounded-[8px] text-xs font-bold bg-[#ff4f7b] hover:bg-[#e03d67] text-white transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {saleSubmitting ? (
+                    <>
+                      <RefreshCw size={12} className="animate-spin" />
+                      Activating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={12} className="fill-current" />
+                      Activate ₹{salePrice} Sale ({saleHours}h)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </main>
     </div>

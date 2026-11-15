@@ -31,6 +31,7 @@ import {
   Activity,
   Search,
   Crown,
+  Sparkles,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,6 +72,11 @@ interface DirectoryUser {
   isPaid: boolean;
   planId: string;
   isNew: boolean;
+  currentPrice?: number;
+  saleType?: "custom" | "welcome" | "none";
+  saleExpiresAt?: string | null;
+  saleRemainingMs?: number;
+  saleHoursLeft?: number;
 }
 
 interface MultiCheckoutUser {
@@ -252,17 +258,17 @@ function timeAgo(iso: string): string {
 }
 
 function pctColor(pct: number | null): string {
-  if (pct === null) return "text-slate-300";
-  if (pct >= 40) return "text-emerald-600";
-  if (pct >= 20) return "text-amber-600";
-  return "text-red-500";
+  if (pct === null) return "text-[#8f8a85] dark:text-[#868c97]";
+  if (pct >= 40) return "text-[#059669] dark:text-emerald-400";
+  if (pct >= 20) return "text-[#d97706] dark:text-amber-400";
+  return "text-[#ff4f7b] dark:text-rose-400";
 }
 
 function pctBg(pct: number | null): string {
-  if (pct === null) return "bg-slate-50";
-  if (pct >= 40) return "bg-emerald-50";
-  if (pct >= 20) return "bg-amber-50";
-  return "bg-red-50";
+  if (pct === null) return "bg-[#f8f8f7] dark:bg-white/[0.04]";
+  if (pct >= 40) return "bg-[#dcf5e7] dark:bg-emerald-950/60";
+  if (pct >= 20) return "bg-[#fff3c4] dark:bg-amber-950/60";
+  return "bg-[#fff1f4] dark:bg-rose-950/60";
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -285,36 +291,36 @@ function StatCard({
   loading?: boolean;
 }) {
   const accentClasses = {
-    default: "bg-slate-50 text-slate-600 border-slate-100",
-    green:   "bg-emerald-50 text-emerald-600 border-emerald-100",
-    indigo:  "bg-indigo-50 text-indigo-600 border-indigo-100",
-    amber:   "bg-amber-50 text-amber-600 border-amber-100",
-    rose:    "bg-rose-50 text-rose-600 border-rose-100",
+    default: "bg-[#f1f1ef] text-[#55514e] border-[#ecebe8] dark:bg-white/10 dark:text-[#b6bbc5] dark:border-white/10",
+    green:   "bg-[#dcf5e7] text-[#178a51] border-[#b6eacd] dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/40",
+    indigo:  "bg-[#e3f1ff] text-[#1d4f86] border-[#c9e5ff] dark:bg-sky-950/70 dark:text-sky-300 dark:border-sky-800/40",
+    amber:   "bg-[#fff3c4] text-[#6b4a00] border-[#ffe68a] dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800/40",
+    rose:    "bg-[#fff1f4] text-[#ff4f7b] border-[#f7cdc8] dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800/40",
   };
 
   return (
-    <div className="bg-white rounded-[14px] border border-slate-200 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+    <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate pr-1">
+        <span className="text-[11px] font-semibold text-[#736d68] dark:text-[#868c97] uppercase tracking-wide truncate pr-1">
           {label}
         </span>
-        <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${accentClasses[accent]}`}>
+        <div className={`w-7 h-7 rounded-[8px] border flex items-center justify-center shrink-0 ${accentClasses[accent]}`}>
           <Icon size={14} strokeWidth={2} />
         </div>
       </div>
       <div>
         <div className="flex items-baseline gap-1.5">
           {loading ? (
-            <div className="shimmer h-7 w-16 rounded" />
+            <div className="shimmer h-7 w-16 rounded-[6px]" />
           ) : (
-            <span className="text-2xl font-bold text-slate-900 tracking-tight leading-none">
+            <span className="text-2xl font-bold text-[#2e2e2e] dark:text-[#f3f5fa] tracking-tight leading-none">
               {value}
             </span>
           )}
-          {trend === "up" && <span className="text-emerald-600 text-xs font-semibold">▲</span>}
-          {trend === "down" && <span className="text-rose-500 text-xs font-semibold">▼</span>}
+          {trend === "up" && <span className="text-[#059669] dark:text-emerald-400 text-xs font-semibold">▲</span>}
+          {trend === "down" && <span className="text-[#ff4f7b] dark:text-rose-400 text-xs font-semibold">▼</span>}
         </div>
-        {sub && <p className="text-[11px] text-slate-400 mt-1 truncate">{sub}</p>}
+        {sub && <p className="text-[11px] text-[#736d68] dark:text-[#868c97] mt-1 truncate">{sub}</p>}
       </div>
     </div>
   );
@@ -330,15 +336,15 @@ function SectionHeader({
   icon: React.ElementType;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
-        <Icon size={14} strokeWidth={2} />
+    <div className="flex items-center gap-2.5">
+      <div className="w-8 h-8 rounded-[8px] bg-[#f1f1ef] dark:bg-white/10 text-[#55514e] dark:text-[#b6bbc5] flex items-center justify-center shrink-0">
+        <Icon size={15} strokeWidth={2} />
       </div>
       <div>
-        <h2 className="text-sm font-bold text-slate-800 tracking-tight leading-none">
+        <h2 className="text-[14px] font-bold text-[#2e2e2e] dark:text-[#f3f5fa] tracking-tight leading-snug">
           {title}
         </h2>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+        {sub && <p className="text-[12px] text-[#736d68] dark:text-[#868c97] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -363,8 +369,8 @@ function UserAvatar({
 
   const gMap = {
     emerald: "from-emerald-400 to-emerald-600",
-    indigo:  "from-indigo-400 to-indigo-600",
-    violet:  "from-violet-400 to-violet-600",
+    indigo:  "from-sky-500 to-blue-600",
+    violet:  "from-indigo-500 to-purple-600",
     amber:   "from-amber-400 to-amber-600",
   };
 
@@ -376,7 +382,7 @@ function UserAvatar({
         alt={name}
         width={36}
         height={36}
-        className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-slate-200"
+        className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-[#ecebe8] dark:ring-white/10"
         onError={(e) => {
           (e.target as HTMLImageElement).style.display = "none";
         }}
@@ -405,9 +411,9 @@ function SparkBar({
   color?: "emerald" | "indigo" | "violet";
 }) {
   const colorMap = {
-    emerald: { active: "bg-emerald-500", inactive: "bg-slate-200 group-hover:bg-slate-300" },
-    indigo:  { active: "bg-indigo-500",  inactive: "bg-slate-200 group-hover:bg-slate-300" },
-    violet:  { active: "bg-violet-500",  inactive: "bg-slate-200 group-hover:bg-slate-300" },
+    emerald: { active: "bg-[#059669] dark:bg-emerald-400", inactive: "bg-[#e6e4e0] dark:bg-white/10 group-hover:bg-[#bdb6ad]" },
+    indigo:  { active: "bg-[#1F75FE] dark:bg-sky-400",     inactive: "bg-[#e6e4e0] dark:bg-white/10 group-hover:bg-[#bdb6ad]" },
+    violet:  { active: "bg-[#7c3aed] dark:bg-purple-400",  inactive: "bg-[#e6e4e0] dark:bg-white/10 group-hover:bg-[#bdb6ad]" },
   };
   const cols = colorMap[color];
 
@@ -436,7 +442,7 @@ function SparkBar({
               className={`w-full rounded-sm transition-all ${isLast ? cols.active : cols.inactive}`}
               style={{ height: `${pct}%` }}
             />
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-10">
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#2e2e2e] dark:bg-white text-white dark:text-[#121417] text-[9px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap z-10 font-semibold shadow-sm">
               {val}
             </div>
           </div>
@@ -455,13 +461,13 @@ function RetentionRing({ pct, loading }: { pct: number; loading: boolean }) {
 
   return (
     <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-      <circle cx="48" cy="48" r={r} fill="none" stroke="#e2e8f0" strokeWidth="8" />
+      <circle cx="48" cy="48" r={r} fill="none" stroke="currentColor" className="text-[#ecebe8] dark:text-white/10" strokeWidth="8" />
       <circle
         cx="48"
         cy="48"
         r={r}
         fill="none"
-        stroke="#10b981"
+        stroke="#059669"
         strokeWidth="8"
         strokeDasharray={`${dash} ${circ}`}
         strokeLinecap="round"
@@ -473,10 +479,7 @@ function RetentionRing({ pct, loading }: { pct: number; loading: boolean }) {
         dominantBaseline="middle"
         textAnchor="middle"
         style={{ transform: "rotate(90deg)", transformOrigin: "48px 48px" }}
-        fill="#0f172a"
-        fontSize="15"
-        fontWeight="700"
-        fontFamily="system-ui"
+        className="fill-[#2e2e2e] dark:fill-[#f3f5fa] font-bold text-[15px]"
       >
         {pct}%
       </text>
@@ -519,12 +522,12 @@ function CohortHeatmap({
       <table className="w-full text-xs border-separate border-spacing-0.5">
         <thead>
           <tr>
-            <th className="text-left text-slate-400 font-medium pb-2 pr-3 whitespace-nowrap w-24">
+            <th className="text-left text-[#736d68] dark:text-[#868c97] font-semibold pb-2 pr-3 whitespace-nowrap w-24">
               Cohort
             </th>
-            <th className="text-slate-400 font-medium pb-2 px-1 w-12 text-center">Size</th>
+            <th className="text-[#736d68] dark:text-[#868c97] font-semibold pb-2 px-1 w-12 text-center">Size</th>
             {headers.map((h) => (
-              <th key={h} className="text-slate-400 font-medium pb-2 px-1 w-12 text-center">
+              <th key={h} className="text-[#736d68] dark:text-[#868c97] font-semibold pb-2 px-1 w-12 text-center">
                 {h}
               </th>
             ))}
@@ -533,19 +536,19 @@ function CohortHeatmap({
         <tbody>
           {rows.map((row) => (
             <tr key={row.cohortDate}>
-              <td className="text-slate-600 font-medium pr-3 py-0.5 whitespace-nowrap">
+              <td className="text-[#55514e] dark:text-[#b6bbc5] font-medium pr-3 py-0.5 whitespace-nowrap">
                 {row.cohortLabel}
               </td>
-              <td className="text-center text-slate-500 py-0.5 px-1">{row.cohortSize}</td>
+              <td className="text-center text-[#736d68] dark:text-[#868c97] py-0.5 px-1">{row.cohortSize}</td>
               {row.dn.map((pct, i) => (
                 <td key={i} className="py-0.5 px-0.5">
                   {pct === null ? (
-                    <div className="h-7 rounded flex items-center justify-center bg-slate-50 text-slate-300">
+                    <div className="h-7 rounded-[6px] flex items-center justify-center bg-[#f8f8f7] dark:bg-white/[0.03] text-[#bdb6ad] dark:text-[#736d68]">
                       —
                     </div>
                   ) : (
                     <div
-                      className={`h-7 rounded flex items-center justify-center font-semibold ${pctBg(pct)} ${pctColor(pct)}`}
+                      className={`h-7 rounded-[6px] flex items-center justify-center font-semibold text-[11px] ${pctBg(pct)} ${pctColor(pct)}`}
                     >
                       {pct}%
                     </div>
@@ -648,31 +651,31 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb]">
+    <div className="min-h-screen bg-[#f8f8f7] dark:bg-[#121417] text-[#2e2e2e] dark:text-[#f3f5fa]">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
 
         {/* ── Hero Banner ── */}
-        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-[#001428] to-emerald-950 text-white shadow-[0_4px_32px_rgba(0,0,0,0.18)]">
-          <div className="absolute inset-0 opacity-[0.25] pointer-events-none"
+        <section className="relative overflow-hidden rounded-[16px] bg-gradient-to-br from-[#0d1736] via-[#14295f] to-[#1b3a8a] text-white shadow-[0_4px_32px_rgba(13,23,54,0.35)] border border-white/10">
+          <div className="absolute inset-0 opacity-[0.18] pointer-events-none"
             style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
-          <div className="absolute -top-20 -right-16 h-64 w-64 rounded-full bg-emerald-400/15 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-emerald-500" />
+          <div className="absolute -top-20 -right-16 h-64 w-64 rounded-full bg-[#1F75FE]/20 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-[#059669]/20 blur-3xl pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#1F75FE] via-[#059669] to-[#fdba12]" />
 
           <div className="relative px-6 sm:px-8 py-7">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.08] border border-white/[0.12] text-xs font-medium text-white/60 uppercase tracking-wider">
-                    <Calendar size={10} />
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-white/[0.08] border border-white/[0.12] text-xs font-medium text-white/70 uppercase tracking-wider">
+                    <Calendar size={11} />
                     {today}
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-400/15 border border-emerald-400/30 text-xs font-semibold text-emerald-300">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] bg-[#dcf5e7]/20 border border-[#4fc787]/40 text-xs font-semibold text-[#86dbae]">
                     Live Platform Analytics
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Platform Overview</h1>
-                <p className="text-white/50 text-sm mt-1.5">Real-time engagement, retention cohorts &amp; user conversion signals</p>
+                <p className="text-white/60 text-sm mt-1.5">Real-time engagement, retention cohorts &amp; user conversion signals</p>
               </div>
 
               {/* hero summary pills */}
@@ -680,7 +683,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => fetchAll(true)}
                   disabled={refreshing}
-                  className="flex items-center gap-1.5 text-xs font-medium text-white/50 hover:text-white border border-white/20 px-3 py-1.5 rounded-lg transition hover:bg-white/10 disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white border border-white/20 px-3 py-1.5 rounded-[8px] transition hover:bg-white/10 disabled:opacity-50"
                 >
                   <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
                   Refresh
@@ -691,9 +694,9 @@ export default function DashboardPage() {
                   { label: "active today",    value: loading ? "—" : (engagement?.dau ?? 0).toString(), green: true },
                   { label: "D1 retention",    value: loading ? "—" : `${retention?.rollingDn?.[0] ?? metrics?.retention ?? 0}%` },
                 ].map(({ label, value, green }) => (
-                  <div key={label} className="flex flex-col items-center px-4 py-3 rounded-xl bg-white/[0.08] border border-white/[0.12]">
-                    <span className={`text-2xl font-bold leading-none ${green ? "text-emerald-300" : "text-white"}`}>{value}</span>
-                    <span className="text-[11px] text-white/50 mt-1 uppercase tracking-wide whitespace-nowrap">{label}</span>
+                  <div key={label} className="flex flex-col items-center px-4 py-2.5 rounded-[12px] bg-white/[0.08] border border-white/[0.12]">
+                    <span className={`text-2xl font-bold leading-none ${green ? "text-[#86dbae]" : "text-white"}`}>{value}</span>
+                    <span className="text-[10px] text-white/60 mt-1 uppercase tracking-wide whitespace-nowrap">{label}</span>
                   </div>
                 ))}
               </div>
@@ -701,8 +704,8 @@ export default function DashboardPage() {
 
             {/* 7-day sparkline */}
             {!loading && metrics?.weeklyActivity && (
-              <div className="mt-5 pt-5 border-t border-white/[0.08]">
-                <p className="text-xs text-white/40 mb-3 uppercase tracking-wide font-medium">7-day active users</p>
+              <div className="mt-5 pt-5 border-t border-white/[0.10]">
+                <p className="text-xs text-white/50 mb-3 uppercase tracking-wide font-medium">7-day active users</p>
                 <div className="flex items-end gap-1.5 h-10">
                   {metrics.weeklyActivity.map((d) => {
                     const max = Math.max(...metrics.weeklyActivity.map((x) => x.users), 1);
@@ -710,8 +713,8 @@ export default function DashboardPage() {
                     const isToday = d.date === new Date().toISOString().slice(0, 10);
                     return (
                       <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                        <div className={`w-full rounded-sm ${isToday ? "bg-emerald-400" : "bg-white/20"}`} style={{ height: `${pct}%` }} />
-                        <span className="text-[9px] text-white/30 leading-none">{d.label}</span>
+                        <div className={`w-full rounded-sm ${isToday ? "bg-[#4fc787]" : "bg-white/25"}`} style={{ height: `${pct}%` }} />
+                        <span className="text-[9px] text-white/40 leading-none">{d.label}</span>
                       </div>
                     );
                   })}
@@ -757,7 +760,7 @@ export default function DashboardPage() {
 
         {/* ── Row 3: Daily Active Users (30d) + Signups (30d) ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <SectionHeader title="Daily Active Users — 30 days" icon={Activity} sub="Union of user_activity + attempts + sessions" />
             <SparkBar data={engagement?.dauTimeseries ?? []} valueKey="dau" loading={loading} color="emerald" />
             <div className="flex justify-between mt-2">
@@ -766,7 +769,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <SectionHeader title="New Signups — 30 days" icon={UserPlus} sub={`${signups?.newSignupsThisWeek ?? 0} this week · ${signups?.newSignupsToday ?? 0} today · ${(signups?.totalAccounts ?? 0).toLocaleString()} total accounts`} />
             <SparkBar data={signups?.signupTimeseries ?? []} valueKey="count" loading={loading} color="indigo" />
             <div className="flex justify-between mt-2">
@@ -780,8 +783,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* All chapters today — scrollable with question counts across chapters */}
-          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-            <div className="px-5 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="md:col-span-2 bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-5 pt-5 pb-3 border-b border-[#ecebe8] dark:border-white/10 flex items-center justify-between">
               <SectionHeader
                 title="All Chapters Solved Today"
                 icon={BookOpen}
@@ -836,7 +839,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Streak stats */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
             <div>
               <SectionHeader title="Streak Stats" icon={Flame} sub="Habitual daily problem solving" />
               {loading ? (
@@ -882,7 +885,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Item 1: Students who never returned after using product */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
                 <SectionHeader
@@ -939,7 +942,7 @@ export default function DashboardPage() {
               </button>
 
               {showProductDropoff && (
-                <div className="mt-3 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                <div className="mt-3 divide-y divide-[#ecebe8] dark:divide-white/10 max-h-56 overflow-y-auto">
                   {(retention?.neverReturnedAfterUsing?.sampleUsers ?? []).length === 0 ? (
                     <p className="text-xs text-slate-400 py-3 text-center">No drop-off students found</p>
                   ) : (
@@ -967,7 +970,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Item 2: Students who never returned after sign up */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
                 <SectionHeader
@@ -1031,7 +1034,7 @@ export default function DashboardPage() {
               </button>
 
               {showSignupDropoff && (
-                <div className="mt-3 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                <div className="mt-3 divide-y divide-[#ecebe8] dark:divide-white/10 max-h-56 overflow-y-auto">
                   {(retention?.neverReturnedAfterSignup?.sampleUsers ?? []).length === 0 ? (
                     <p className="text-xs text-slate-400 py-3 text-center">No drop-off signups found</p>
                   ) : (
@@ -1062,8 +1065,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Row 3: Cohort Retention with Interval & Segment Switches (Item 4) ── */}
-        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-[#ecebe8] dark:border-white/10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <SectionHeader
                 title={`Cohort Retention — ${retentionInterval === "weekly" ? "Weekly (W1–W8)" : retentionInterval === "monthly" ? "Monthly (M1–M6)" : "Daily (D1–D7)"}`}
@@ -1103,7 +1106,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Rolling average pill row */}
-          <div className="px-5 py-3 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-5 py-3 bg-slate-50/70 border-b border-[#ecebe8] dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
               Average Retention:
             </span>
@@ -1132,7 +1135,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Repeat usage distribution */}
-          <div className="md:col-span-2 bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]">
+          <div className="md:col-span-2 bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <div className="flex items-start justify-between mb-4">
               <SectionHeader
                 title="Platform Repeat Usage"
@@ -1165,7 +1168,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Monthly retention card */}
-          <div className="bg-white rounded-[14px] border border-slate-200 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] flex flex-col justify-between">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
             <div>
               <SectionHeader title="Monthly Retention" icon={TrendingUp} sub="Last month active returning this month" />
               <div className="my-5 flex flex-col items-center justify-center gap-2">
@@ -1189,8 +1192,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Row 5: Users Who Exceeded 3-Question Daily Limit (Item 5) ── */}
-        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-[#ecebe8] dark:border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <SectionHeader
                 title="Daily Limit Exceeded (> 3 Questions) &amp; High-Volume Solvers"
@@ -1229,7 +1232,7 @@ export default function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-[#ecebe8] dark:border-white/10">
                   <tr>
                     <th className="py-2.5 px-5">Student</th>
                     <th className="py-2.5 px-3">Status</th>
@@ -1239,7 +1242,7 @@ export default function DashboardPage() {
                     <th className="py-2.5 px-5 text-right">Last Exceeded</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
                   {(metrics?.limitExceededUsers?.users ?? []).map((u) => (
                     <tr key={u.userId} className="hover:bg-slate-50/80 transition">
                       <td className="py-3 px-5">
@@ -1279,8 +1282,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Row 6: Multiple Checkout Openers (Item 3) ── */}
-        <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-[#ecebe8] dark:border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <SectionHeader
                 title="Multiple Checkout Openers (High Purchase Intent)"
@@ -1312,7 +1315,7 @@ export default function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-[#ecebe8] dark:border-white/10">
                   <tr>
                     <th className="py-2.5 px-5">Student</th>
                     <th className="py-2.5 px-3 text-center">Times Checkout Opened</th>
@@ -1321,7 +1324,7 @@ export default function DashboardPage() {
                     <th className="py-2.5 px-5 text-right">Last Checkout Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
                   {(metrics?.multipleCheckoutUsers?.users ?? []).map((u) => (
                     <tr key={u.userId} className="hover:bg-slate-50/80 transition">
                       <td className="py-3 px-5">
@@ -1364,8 +1367,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Top retained power users */}
-          <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-            <div className="px-5 pt-5 pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-5 pt-5 pb-3 border-b border-[#ecebe8] dark:border-white/10">
               <SectionHeader
                 title="Power Users — Last 7 Days"
                 icon={Award}
@@ -1382,7 +1385,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm">No power users active 5+ days this week</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
+              <div className="divide-y divide-[#ecebe8] dark:divide-white/10 max-h-[340px] overflow-y-auto">
                 {(retention?.topRetainedUsers ?? []).map((u, i) => (
                   <Link
                     key={u.userId}
@@ -1413,8 +1416,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Recently Active Students */}
-          <div className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-            <div className="px-5 pt-5 pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-5 pt-5 pb-3 border-b border-[#ecebe8] dark:border-white/10">
               <SectionHeader title="Recently Active Students" icon={Zap} sub="Real-time activity from latest sessions · click student to view profile" />
             </div>
             {loading ? (
@@ -1427,7 +1430,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-sm">No recent activity</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
+              <div className="divide-y divide-[#ecebe8] dark:divide-white/10 max-h-[340px] overflow-y-auto">
                 {(metrics?.recentUsers ?? []).map((u) => (
                   <Link
                     key={u.userId}
@@ -1453,8 +1456,8 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Row 8: All Registered Students Directory ── */}
-        <section className="bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)] overflow-hidden">
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <section className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-5 pt-5 pb-4 border-b border-[#ecebe8] dark:border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <SectionHeader
                 title="All Registered Students"
@@ -1471,21 +1474,21 @@ export default function DashboardPage() {
                   placeholder="Search student or email…"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-48 sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                  className="w-48 sm:w-64 pl-8 pr-3 py-1.5 text-xs rounded-[8px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-[#2e2e2e] dark:text-[#f3f5fa] placeholder-[#8f8a85] focus:bg-white dark:focus:bg-[#16181c] focus:outline-none focus:ring-2 focus:ring-[#1F75FE]/20 focus:border-[#1F75FE] transition"
                 />
-                <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                <Search size={13} className="absolute left-2.5 top-2.5 text-[#8f8a85]" />
               </div>
 
               {/* Filter tabs */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <div className="flex items-center gap-1 bg-[#f1f1ef] dark:bg-white/5 p-1 rounded-[8px]">
                 {(["all", "active", "paid", "free", "new"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setUserFilter(tab)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition capitalize ${
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-[6px] transition capitalize ${
                       userFilter === tab
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-800"
+                        ? "bg-white dark:bg-[#24272c] text-[#2e2e2e] dark:text-[#f3f5fa] shadow-sm"
+                        : "text-[#736d68] dark:text-[#868c97] hover:text-[#2e2e2e] dark:hover:text-[#f3f5fa]"
                     }`}
                   >
                     {tab === "all" ? "All" : tab === "active" ? "Active" : tab === "paid" ? "Paid" : tab === "free" ? "Free" : "New (<24h)"}
@@ -1495,7 +1498,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Directory Content */}
           {(() => {
             const filteredUsers = allUsers.filter((u) => {
               if (userSearch) {
@@ -1512,89 +1515,188 @@ export default function DashboardPage() {
 
             if (filteredUsers.length === 0) {
               return (
-                <div className="p-12 text-center text-slate-400">
-                  <Users size={32} className="mx-auto mb-2 opacity-50" />
+                <div className="p-12 text-center text-[#8f8a85] dark:text-[#868c97]">
+                  <Users size={32} className="mx-auto mb-2 opacity-40" />
                   <p className="text-sm font-medium">No students match your search</p>
                 </div>
               );
             }
 
             return (
-              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 uppercase text-[10px] sticky top-0 z-10">
-                    <tr>
-                      <th className="py-2.5 px-5">Student</th>
-                      <th className="py-2.5 px-3">Class &amp; Exam</th>
-                      <th className="py-2.5 px-3 text-center">Questions Attempted</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Last Active</th>
-                      <th className="py-2.5 px-5 text-right">Registered</th>
-                      <th className="py-2.5 px-4 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredUsers.slice(0, 150).map((u) => (
-                      <tr key={u.userId} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-5">
-                          <Link href={`/users/${u.userId}`} className="flex items-center gap-2.5 group">
-                            <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
-                            <div className="min-w-0 max-w-[200px]">
-                              <p className="font-semibold text-slate-900 truncate group-hover:text-emerald-700 transition">
-                                {u.name}
-                              </p>
-                              <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId.slice(0, 8)}</p>
-                            </div>
-                          </Link>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="text-slate-700 font-medium">{u.class}</span>
-                          <span className="text-[11px] text-slate-400 block">{u.exam}</span>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className={`font-bold tabular-nums text-sm ${u.totalAttempts > 0 ? "text-slate-900" : "text-slate-300"}`}>
-                            {u.totalAttempts}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
+              <>
+                {/* Mobile Card List (< sm) */}
+                <div className="sm:hidden divide-y divide-[#ecebe8] dark:divide-white/10">
+                  {filteredUsers.slice(0, 80).map((u) => (
+                    <div key={u.userId} className="p-4 space-y-2.5 hover:bg-[#f8f8f7]/60 dark:hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <Link href={`/users/${u.userId}`} className="flex items-center gap-2.5 min-w-0">
+                          <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[13px] text-[#2e2e2e] dark:text-[#f3f5fa] truncate">
+                              {u.name}
+                            </p>
+                            <p className="text-[11px] text-[#736d68] dark:text-[#868c97] truncate">
+                              {u.email || u.userId.slice(0, 8)}
+                            </p>
+                          </div>
+                        </Link>
+                        <Link
+                          href={`/users/${u.userId}`}
+                          className="shrink-0 px-2.5 py-1 rounded-[8px] bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-300 text-[11px] font-semibold"
+                        >
+                          View →
+                        </Link>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-[#55514e] dark:text-[#b6bbc5]">
+                        <span>{u.class !== "—" ? `${u.class} · ${u.exam}` : u.exam}</span>
+                        <span className="font-bold tabular-nums">{u.totalAttempts} questions solved</span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <div>
                           {u.isPaid ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
-                              <Crown size={10} className="text-amber-500 fill-amber-500" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300">
+                              <Crown size={10} className="text-[#fdba12] fill-[#fdba12]" />
                               Paid Pass
                             </span>
-                          ) : u.isNew ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold text-[10px] bg-sky-100 text-sky-800">
-                              New (&lt;24h)
+                          ) : u.saleType === "custom" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300">
+                              <Sparkles size={10} />
+                              ₹{u.currentPrice} (Custom · {u.saleHoursLeft}h left)
+                            </span>
+                          ) : u.saleType === "welcome" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/70 dark:text-sky-300">
+                              <Clock size={10} />
+                              ₹399 (60% OFF · {u.saleHoursLeft}h left)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium text-[10px] bg-slate-100 text-slate-600">
-                              Free User
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5]">
+                              ₹999 (Standard Base)
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
-                          {timeAgo(u.lastSeen)}
-                        </td>
-                        <td className="py-3 px-5 text-right text-slate-400 whitespace-nowrap">
-                          {new Date(u.createdAt).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <Link
-                            href={`/users/${u.userId}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-[11px] transition"
-                          >
-                            View →
-                          </Link>
-                        </td>
+                        </div>
+                        <span className="text-[11px] text-[#8f8a85] dark:text-[#868c97]">{timeAgo(u.lastSeen)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View (≥ sm) */}
+                <div className="hidden sm:block overflow-x-auto max-h-[540px] overflow-y-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#736d68] dark:text-[#868c97] border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] sticky top-0 z-10 font-semibold tracking-wider">
+                      <tr>
+                        <th className="py-2.5 px-5">Student</th>
+                        <th className="py-2.5 px-3">Class &amp; Exam</th>
+                        <th className="py-2.5 px-3 text-center">Questions</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3">Current Price &amp; Sale Status</th>
+                        <th className="py-2.5 px-3">Last Active</th>
+                        <th className="py-2.5 px-4 text-right">Registered</th>
+                        <th className="py-2.5 px-4 text-center">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
+                      {filteredUsers.slice(0, 150).map((u) => (
+                        <tr key={u.userId} className="hover:bg-[#f8f8f7]/80 dark:hover:bg-white/[0.03] transition-colors">
+                          <td className="py-3 px-5">
+                            <Link href={`/users/${u.userId}`} className="flex items-center gap-2.5 group">
+                              <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                              <div className="min-w-0 max-w-[200px]">
+                                <p className="font-semibold text-[#2e2e2e] dark:text-[#f3f5fa] truncate group-hover:text-[#2a6fb5] dark:group-hover:text-sky-300 transition-colors">
+                                  {u.name}
+                                </p>
+                                <p className="text-[11px] text-[#736d68] dark:text-[#868c97] truncate">{u.email || u.userId.slice(0, 8)}</p>
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="text-[#2e2e2e] dark:text-[#f3f5fa] font-medium">{u.class}</span>
+                            <span className="text-[11px] text-[#736d68] dark:text-[#868c97] block">{u.exam}</span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`font-bold tabular-nums text-sm ${u.totalAttempts > 0 ? "text-[#2e2e2e] dark:text-[#f3f5fa]" : "text-[#bdb6ad] dark:text-[#736d68]"}`}>
+                              {u.totalAttempts}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {u.isPaid ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300">
+                                <Crown size={10} className="text-[#fdba12] fill-[#fdba12]" />
+                                Paid Pass
+                              </span>
+                            ) : u.isNew ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-semibold text-[10px] bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-300">
+                                New (&lt;24h)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5]">
+                                Free User
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            {u.isPaid ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] font-bold text-[#178a51] dark:text-emerald-400">
+                                  Paid Subscriber
+                                </span>
+                                <span className="text-[10px] text-[#736d68] dark:text-[#868c97]">All features unlocked</span>
+                              </div>
+                            ) : u.saleType === "custom" ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300 w-fit">
+                                  <Sparkles size={10} />
+                                  ₹{u.currentPrice ?? 399} (Custom)
+                                </span>
+                                <span className="text-[10px] text-[#ff4f7b] dark:text-rose-400 font-medium">
+                                  ⚡ {u.saleHoursLeft}h left
+                                </span>
+                              </div>
+                            ) : u.saleType === "welcome" ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/70 dark:text-sky-300 w-fit">
+                                  <Clock size={10} />
+                                  ₹399 (60% OFF)
+                                </span>
+                                <span className="text-[10px] text-[#2a6fb5] dark:text-sky-400 font-medium">
+                                  ⏱️ {u.saleHoursLeft}h left
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5] w-fit">
+                                  ₹999 (Standard Base)
+                                </span>
+                                <span className="text-[10px] text-[#736d68] dark:text-[#868c97]">Sale expired</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-[#55514e] dark:text-[#b6bbc5] whitespace-nowrap">
+                            {timeAgo(u.lastSeen)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-[#736d68] dark:text-[#868c97] whitespace-nowrap">
+                            {new Date(u.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <Link
+                              href={`/users/${u.userId}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[8px] bg-[#e3f1ff] text-[#1d4f86] hover:bg-[#c9e5ff] dark:bg-sky-950/70 dark:text-sky-300 dark:hover:bg-sky-900/80 font-semibold text-[11px] transition"
+                            >
+                              View →
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             );
           })()}
         </section>

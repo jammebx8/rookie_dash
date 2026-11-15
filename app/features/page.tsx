@@ -7,7 +7,7 @@ import {
 import type { FeaturesData } from "@/app/api/features/route";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-const CARD = "bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]";
+const CARD = "bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
 const SHIM = "shimmer rounded";
 
 // ─── Feature definitions ──────────────────────────────────────────────────────
@@ -123,7 +123,26 @@ export default function FeaturesPage() {
     finally { setLoading(false); setRefreshing(false); }
   }, [segment]);
 
-  useEffect(() => { fetchData(segment); }, [fetchData, segment]);
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/features?segment=${segment}`, { cache: "no-store" });
+        const json = await res.json();
+        if (!ignore) {
+          setData(json);
+          setLastRefresh(new Date());
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => { ignore = true; };
+  }, [segment]);
 
   // ── Compute answered counts per feature ────────────────────────────────────
   const answeredByFeature = FEATURES.map(f => {

@@ -1,89 +1,159 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Zap,
   DollarSign,
   ShieldCheck,
+  Sun,
+  Moon,
+  Menu,
+  X,
 } from "lucide-react";
+import { useNightOwl } from "@/lib/theme";
 
 const TABS = [
-  { href: "/",        label: "Dashboard", icon: LayoutDashboard },
-  { href: "/features", label: "Features",  icon: Zap            },
-  { href: "/revenue",  label: "Revenue",   icon: DollarSign     },
-  { href: "/grant-pass", label: "Grant Pass", icon: ShieldCheck },
+  { href: "/",          label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/features",  label: "Features",   icon: Zap            },
+  { href: "/revenue",   label: "Revenue",    icon: DollarSign     },
+  { href: "/grant-pass",label: "Grant Pass", icon: ShieldCheck    },
 ] as const;
 
 export function NavBar() {
   const pathname = usePathname();
+  const { dark, toggle, mounted } = useNightOwl();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#16181c]/95 backdrop-blur-md border-b border-[#ecebe8] dark:border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-14 gap-6">
+        <div className="flex items-center justify-between h-14">
 
-          {/* Brand */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="7" fill="#10b981" />
-              <path d="M8 20V10l6-3 6 3v10"   stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M11 20v-5h6v5"          stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-bold text-slate-900 text-base tracking-tight leading-none">
-              Rookie
-            </span>
-            <span className="hidden sm:inline-block text-[11px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full leading-none">
-              Admin
-            </span>
+          {/* Brand Left Slot */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="flex items-center gap-2.5 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-dp-sky-500"
+            >
+              <div className="relative size-8 rounded-[8px] overflow-hidden bg-[#e3f1ff] dark:bg-sky-950/80 flex items-center justify-center shrink-0 shadow-sm border border-black/5 dark:border-white/10">
+                <Image
+                  src="/brand/rookie-owl.png"
+                  alt="Rookie"
+                  width={32}
+                  height={32}
+                  className="size-8 object-contain"
+                  priority
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-[15px] tracking-tight text-[#2e2e2e] dark:text-[#f3f5fa]">
+                  Rookie
+                </span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/80 dark:text-sky-300">
+                  Admin
+                </span>
+              </div>
+            </Link>
+
+            {/* Desktop Navigation Tabs */}
+            <nav className="hidden md:flex items-center ml-4 gap-1" aria-label="Main navigation">
+              {TABS.map(({ href, label, icon: Icon }) => {
+                const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={[
+                      "flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[13px] font-medium transition-colors select-none",
+                      active
+                        ? "bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-200 font-semibold"
+                        : "text-[#736d68] hover:text-[#2e2e2e] hover:bg-[#f1f1ef] dark:text-[#868c97] dark:hover:text-[#f3f5fa] dark:hover:bg-white/5",
+                    ].join(" ")}
+                  >
+                    <Icon
+                      size={15}
+                      strokeWidth={active ? 2.2 : 1.8}
+                      className={active ? "text-[#2a6fb5] dark:text-sky-400" : ""}
+                    />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
 
-          {/* Tab navigation */}
-          <nav className="flex items-end h-full gap-0.5" aria-label="Main navigation">
-            {TABS.map(({ href, label, icon: Icon }) => {
-              const active =
-                href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(href);
+          {/* Right Action Slot */}
+          <div className="flex items-center gap-2">
+            {/* Live date indicator (Desktop) */}
+            <div className="hidden lg:block text-[12px] text-[#736d68] dark:text-[#868c97] mr-2">
+              {new Date().toLocaleDateString("en-IN", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              })}
+            </div>
 
+            {/* Night Owl Theme Toggle */}
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={dark ? "Switch to light mode" : "Switch to Night owl dark mode"}
+              title={dark ? "Switch to light mode" : "Switch to Night owl"}
+              className="size-9 rounded-[8px] flex items-center justify-center text-[#55514e] dark:text-[#b6bbc5] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors border border-transparent hover:border-[#ecebe8] dark:hover:border-white/10 outline-none focus-visible:ring-2 focus-visible:ring-dp-sky-500"
+            >
+              {mounted && dark ? (
+                <Sun size={17} className="text-[#ffd84d]" />
+              ) : (
+                <Moon size={17} className="text-[#736d68]" />
+              )}
+            </button>
+
+            {/* Mobile menu toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              aria-label="Toggle navigation menu"
+              className="md:hidden size-9 rounded-[8px] flex items-center justify-center text-[#55514e] dark:text-[#b6bbc5] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors"
+            >
+              {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden py-3 border-t border-[#ecebe8] dark:border-white/10 flex flex-col gap-1">
+            {TABS.map(({ href, label, icon: Icon }) => {
+              const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
               return (
                 <Link
                   key={href}
                   href={href}
-                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={[
-                    "relative flex items-center gap-2 px-4 h-14 text-sm font-medium transition-colors select-none",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-[14px] font-medium transition-colors",
                     active
-                      ? "text-slate-900"
-                      : "text-slate-500 hover:text-slate-700",
+                      ? "bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/80 dark:text-sky-200 font-semibold"
+                      : "text-[#55514e] hover:bg-[#f1f1ef] dark:text-[#b6bbc5] dark:hover:bg-white/5",
                   ].join(" ")}
                 >
                   <Icon
-                    size={15}
+                    size={17}
                     strokeWidth={active ? 2.2 : 1.8}
-                    className={active ? "text-emerald-600" : ""}
+                    className={active ? "text-[#2a6fb5] dark:text-sky-400" : ""}
                   />
                   {label}
-                  {/* Active underline */}
-                  {active && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-emerald-500 rounded-t-sm" />
-                  )}
                 </Link>
               );
             })}
-          </nav>
-
-          {/* Right slot — date */}
-          <div className="ml-auto hidden sm:block text-xs text-slate-400 shrink-0">
-            {new Date().toLocaleDateString("en-IN", {
-              weekday: "short",
-              day:     "numeric",
-              month:   "short",
-              year:    "numeric",
-            })}
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

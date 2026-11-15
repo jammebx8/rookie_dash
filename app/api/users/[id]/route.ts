@@ -113,6 +113,42 @@ export async function GET(
       accuracy: c.count > 0 ? Math.round((c.correct / c.count) * 100) : 0,
     })).sort((a, b) => b.count - a.count);
 
+    // Custom sale info
+    const now = new Date();
+    const metaSale = (authUser?.app_metadata as Record<string, any> | undefined)?.custom_sale;
+    let activeCustomSale: any = null;
+    if (
+      metaSale &&
+      metaSale.is_active !== false &&
+      new Date(metaSale.expires_at) > now &&
+      Number(metaSale.custom_price_paise) > 0
+    ) {
+      activeCustomSale = {
+        customPrice: Math.round(Number(metaSale.custom_price_paise) / 100),
+        customPricePaise: Number(metaSale.custom_price_paise),
+        expiresAt: metaSale.expires_at,
+        durationHours: Number(metaSale.duration_hours) || 24,
+        reason: metaSale.reason || "Custom Discount",
+        remainingMs: Math.max(0, new Date(metaSale.expires_at).getTime() - now.getTime()),
+      };
+    }
+
+    // 48h Welcome sale info
+    const signupMs = new Date(authUser?.created_at ?? publicUser?.created_at ?? now).getTime();
+    const welcomeEndMs = signupMs + 48 * 3600 * 1000;
+    const isWelcomeLive = now.getTime() < welcomeEndMs;
+    const welcomeRemainingMs = Math.max(0, welcomeEndMs - now.getTime());
+
+    let effectivePrice = 999;
+    let saleType: "custom" | "welcome" | "none" = "none";
+    if (activeCustomSale) {
+      effectivePrice = activeCustomSale.customPrice;
+      saleType = "custom";
+    } else if (isWelcomeLive) {
+      effectivePrice = 399;
+      saleType = "welcome";
+    }
+
     return NextResponse.json({
       profile: {
         id,
@@ -129,6 +165,18 @@ export async function GET(
         isPaid,
         planId: activePass?.plan_id ?? (orders.find((o) => o.status === "paid")?.plan_id ?? "free"),
         accessUntil: activePass?.access_until ?? null,
+      },
+      salePricing: {
+        basePrice: 999,
+        effectivePrice,
+        saleType,
+        activeCustomSale,
+        welcomeSale: {
+          isActive: isWelcomeLive,
+          expiresAt: new Date(welcomeEndMs).toISOString(),
+          remainingMs: welcomeRemainingMs,
+          remainingHours: Number((welcomeRemainingMs / (3600 * 1000)).toFixed(1)),
+        },
       },
       kpis: {
         totalAttempts,

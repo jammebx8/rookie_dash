@@ -1,44 +1,29 @@
 @import "tailwindcss";
+@import "@fontsource/open-sauce-two/400.css";
+@import "@fontsource/open-sauce-two/500.css";
+@import "@fontsource/open-sauce-two/600.css";
+@import "@fontsource/open-sauce-two/700.css";
+@import "./tokens.css";
+@import "./theme.css";
 
-/* ── Design tokens ── */
-:root {
-  --background:   #f8f9fb;
-  --foreground:   #0f172a;
-  --surface:      #ffffff;
-  --surface-low:  #f1f5f9;
-  --border:       #e2e8f0;
-  --border-soft:  rgba(226, 232, 240, 0.6);
-
-  --primary:      #10b981;   /* emerald-500  */
-  --primary-dim:  #d1fae5;   /* emerald-100  */
-  --primary-text: #065f46;   /* emerald-900  */
-
-  --accent:       #6366f1;   /* indigo-500   */
-  --accent-dim:   #e0e7ff;
-
-  --warn:         #f59e0b;   /* amber-500    */
-  --warn-dim:     #fef3c7;
-
-  --danger:       #ef4444;   /* red-500      */
-  --danger-dim:   #fee2e2;
-
-  --muted:        #64748b;   /* slate-500    */
-  --muted-light:  #94a3b8;
-
-  --radius-card:  14px;
-  --shadow-card:  0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
-  --shadow-hero:  0 4px 32px rgba(0,0,0,0.18);
+/* ── Dropper Design System Core ── */
+html {
+  font-size: 14px; /* Dropper 14px dashboard root: all rem-based typography scales together */
 }
 
-/* ── Base ── */
-*, *::before, *::after { box-sizing: border-box; }
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans, system-ui, sans-serif);
+  background-color: var(--dp-surface-canvas);
+  color: var(--dp-text-primary);
+  font-family: var(--dp-font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Smooth transitions for theme toggle ── */
+body, header, nav, aside, section, div, button, table {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 150ms;
+  transition-timing-function: var(--dp-ease-standard);
 }
 
 /* ── Shimmer skeleton ── */
@@ -50,21 +35,16 @@ body {
 .shimmer {
   background: linear-gradient(
     90deg,
-    var(--surface-low) 25%,
-    #e8edf2         50%,
-    var(--surface-low) 75%
+    var(--dp-surface-sunken) 25%,
+    var(--dp-border-default) 50%,
+    var(--dp-surface-sunken) 75%
   );
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
 }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar         { width: 6px; height: 6px; }
-::-webkit-scrollbar-track   { background: transparent; }
-::-webkit-scrollbar-thumb   { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted-light); }
-
-/* ── Mini bar chart helper ── */
-.bar-fill {
-  transition: height 0.4s ease;
-}
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--dp-border-default); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--dp-border-strong); }

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@fontsource/open-sauce-two": "^5.3.0",
     "@supabase/supabase-js": "^2.117.2",
     "firebase": "^12.19.0",
     "lucide-react": "^1.48.0",

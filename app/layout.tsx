@@ -1,21 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "./NavBar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Rookie — Admin Dashboard",
-  description: "Real-time analytics for the Rookie learning platform",
+  title: "Rookie — Admin Analytics & Operations",
+  description: "Real-time analytics, user retention, cohort analysis and revenue operations for Rookie",
+  icons: {
+    icon: "/brand/rookie-owl.png",
+  },
 };
 
 export default function RootLayout({
@@ -24,13 +16,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-[#f8f9fb]">
+    <html lang="en" suppressHydrationWarning className="h-full">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const t = localStorage.getItem('theme');
+                if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-[#f8f8f7] dark:bg-[#121417] text-[#2e2e2e] dark:text-[#f3f5fa] antialiased">
         <NavBar />
-        <div className="flex-1">{children}</div>
+        <main className="flex-1 w-full">{children}</main>
       </body>
     </html>
   );

@@ -50,9 +50,45 @@ export async function GET() {
     const allActivity  = activityRes.data     ?? [];
     const allTests     = testsRes.data        ?? [];
 
-    // Map of user signup dates from auth.users
+    // Map of user signup dates and pricing from auth.users
     const userSignupMap = new Map<string, string>();
-    authUsers.forEach((u) => userSignupMap.set(u.id, u.created_at));
+    const userSaleMap = new Map<string, { currentPrice: number; saleType: "custom" | "welcome" | "none"; saleHoursLeft: number; saleExpiresAt: string | null }>();
+    const FORTY_EIGHT_HOURS_MS = 48 * 3600 * 1000;
+    const nowTime = Date.now();
+
+    authUsers.forEach((u) => {
+      userSignupMap.set(u.id, u.created_at);
+      const appMeta = (u.app_metadata ?? {}) as Record<string, any>;
+      const signupAgeMs = nowTime - new Date(u.created_at).getTime();
+      let currentPrice = 999;
+      let saleType: "custom" | "welcome" | "none" = "none";
+      let saleExpiresAt: string | null = null;
+      let saleRemainingMs = 0;
+      let saleHoursLeft = 0;
+
+      const customSale = appMeta.custom_sale;
+      if (
+        customSale &&
+        customSale.is_active !== false &&
+        new Date(customSale.expires_at).getTime() > nowTime &&
+        Number(customSale.custom_price_paise) > 0
+      ) {
+        currentPrice = Math.round(Number(customSale.custom_price_paise) / 100);
+        saleType = "custom";
+        saleExpiresAt = customSale.expires_at;
+        saleRemainingMs = Math.max(0, new Date(customSale.expires_at).getTime() - nowTime);
+        saleHoursLeft = Number((saleRemainingMs / (3600 * 1000)).toFixed(1));
+      } else if (signupAgeMs < FORTY_EIGHT_HOURS_MS) {
+        currentPrice = 399;
+        saleType = "welcome";
+        const welcomeEndMs = new Date(u.created_at).getTime() + FORTY_EIGHT_HOURS_MS;
+        saleExpiresAt = new Date(welcomeEndMs).toISOString();
+        saleRemainingMs = Math.max(0, welcomeEndMs - nowTime);
+        saleHoursLeft = Number((saleRemainingMs / (3600 * 1000)).toFixed(1));
+      }
+
+      userSaleMap.set(u.id, { currentPrice, saleType, saleHoursLeft, saleExpiresAt });
+    });
 
     // ── Classify orders ────────────────────────────────────────────────────
     const allCreated = orders; // every order row = one checkout page hit
@@ -309,6 +345,7 @@ export async function GET() {
     const enrichedMultiCheckoutUsers = multiCheckoutEntries.map(([uid, v]) => {
       const p = profileMap.get(uid);
       const isPaid = v.paid || payingUserIds.has(uid);
+      const sale = userSaleMap.get(uid);
       return {
         userId: uid,
         name: p?.name ?? uid.slice(0, 8),
@@ -320,12 +357,17 @@ export async function GET() {
         planId: [...v.plans].join(", ") || "rookie_pass_yearly",
         lastCheckoutAt: v.lastCheckoutAt,
         lastAmount: v.lastAmount,
+        currentPrice: sale?.currentPrice ?? 999,
+        saleType: sale?.saleType ?? "none",
+        saleHoursLeft: sale?.saleHoursLeft ?? 0,
+        saleExpiresAt: sale?.saleExpiresAt ?? null,
       };
     });
 
     const enrichedAllCheckoutUsers = allCheckoutEntries.map(([uid, v]) => {
       const p = profileMap.get(uid);
       const isPaid = v.paid || payingUserIds.has(uid);
+      const sale = userSaleMap.get(uid);
       return {
         userId: uid,
         name: p?.name ?? uid.slice(0, 8),
@@ -337,6 +379,10 @@ export async function GET() {
         planId: [...v.plans].join(", ") || "rookie_pass_yearly",
         lastCheckoutAt: v.lastCheckoutAt,
         lastAmount: v.lastAmount,
+        currentPrice: sale?.currentPrice ?? 999,
+        saleType: sale?.saleType ?? "none",
+        saleHoursLeft: sale?.saleHoursLeft ?? 0,
+        saleExpiresAt: sale?.saleExpiresAt ?? null,
       };
     });
 

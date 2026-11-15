@@ -39,7 +39,7 @@ interface PassHolder {
 }
 
 const CARD =
-  "bg-white rounded-[14px] border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.07),0_4px_12px_rgba(0,0,0,0.05)]";
+  "bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
 
 const DURATION_OPTIONS = [
   { days: 30, label: "1 Month", desc: "30 days" },
