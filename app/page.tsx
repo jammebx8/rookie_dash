@@ -258,17 +258,17 @@ function timeAgo(iso: string): string {
 }
 
 function pctColor(pct: number | null): string {
-  if (pct === null) return "text-[#8f8a85] dark:text-[#868c97]";
-  if (pct >= 40) return "text-[#059669] dark:text-emerald-400";
-  if (pct >= 20) return "text-[#d97706] dark:text-amber-400";
-  return "text-[#ff4f7b] dark:text-rose-400";
+  if (pct === null) return "text-[#64748b] dark:text-[#94a3b8]";
+  if (pct >= 40) return "text-[#047857] dark:text-emerald-300";
+  if (pct >= 20) return "text-[#b45309] dark:text-amber-300";
+  return "text-[#e11d48] dark:text-rose-300";
 }
 
 function pctBg(pct: number | null): string {
   if (pct === null) return "bg-[#f8f8f7] dark:bg-white/[0.04]";
-  if (pct >= 40) return "bg-[#dcf5e7] dark:bg-emerald-950/60";
-  if (pct >= 20) return "bg-[#fff3c4] dark:bg-amber-950/60";
-  return "bg-[#fff1f4] dark:bg-rose-950/60";
+  if (pct >= 40) return "bg-[#dcf5e7] dark:bg-emerald-950/70 border border-[#b6eacd] dark:border-emerald-800/40";
+  if (pct >= 20) return "bg-[#fff3c4] dark:bg-amber-950/70 border border-[#ffe68a] dark:border-amber-800/40";
+  return "bg-[#fff1f4] dark:bg-rose-950/70 border border-[#f7cdc8] dark:border-rose-800/40";
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ function StatCard({
   return (
     <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col justify-between">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-semibold text-[#736d68] dark:text-[#868c97] uppercase tracking-wide truncate pr-1">
+        <span className="text-[11px] font-bold text-[#475569] dark:text-[#cbd5e1] uppercase tracking-wide truncate pr-1">
           {label}
         </span>
         <div className={`w-7 h-7 rounded-[8px] border flex items-center justify-center shrink-0 ${accentClasses[accent]}`}>
@@ -313,14 +313,14 @@ function StatCard({
           {loading ? (
             <div className="shimmer h-7 w-16 rounded-[6px]" />
           ) : (
-            <span className="text-2xl font-bold text-[#2e2e2e] dark:text-[#f3f5fa] tracking-tight leading-none">
+            <span className="text-2xl font-bold text-[#0f172a] dark:text-[#ffffff] tracking-tight leading-none">
               {value}
             </span>
           )}
           {trend === "up" && <span className="text-[#059669] dark:text-emerald-400 text-xs font-semibold">▲</span>}
           {trend === "down" && <span className="text-[#ff4f7b] dark:text-rose-400 text-xs font-semibold">▼</span>}
         </div>
-        {sub && <p className="text-[11px] text-[#736d68] dark:text-[#868c97] mt-1 truncate">{sub}</p>}
+        {sub && <p className="text-[11px] font-medium text-[#64748b] dark:text-[#94a3b8] mt-1 truncate">{sub}</p>}
       </div>
     </div>
   );
@@ -337,14 +337,14 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-[8px] bg-[#f1f1ef] dark:bg-white/10 text-[#55514e] dark:text-[#b6bbc5] flex items-center justify-center shrink-0">
+      <div className="w-8 h-8 rounded-[8px] bg-[#f1f1ef] dark:bg-white/10 text-[#334155] dark:text-[#f8fafc] flex items-center justify-center shrink-0">
         <Icon size={15} strokeWidth={2} />
       </div>
       <div>
-        <h2 className="text-[14px] font-bold text-[#2e2e2e] dark:text-[#f3f5fa] tracking-tight leading-snug">
+        <h2 className="text-[15px] font-bold text-[#0f172a] dark:text-[#ffffff] tracking-tight leading-snug">
           {title}
         </h2>
-        {sub && <p className="text-[12px] text-[#736d68] dark:text-[#868c97] mt-0.5">{sub}</p>}
+        {sub && <p className="text-[12px] font-medium text-[#475569] dark:text-[#cbd5e1] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -522,12 +522,12 @@ function CohortHeatmap({
       <table className="w-full text-xs border-separate border-spacing-0.5">
         <thead>
           <tr>
-            <th className="text-left text-[#736d68] dark:text-[#868c97] font-semibold pb-2 pr-3 whitespace-nowrap w-24">
+            <th className="text-left text-[#475569] dark:text-[#cbd5e1] font-bold pb-2 pr-3 whitespace-nowrap w-24">
               Cohort
             </th>
-            <th className="text-[#736d68] dark:text-[#868c97] font-semibold pb-2 px-1 w-12 text-center">Size</th>
+            <th className="text-[#475569] dark:text-[#cbd5e1] font-bold pb-2 px-1 w-12 text-center">Size</th>
             {headers.map((h) => (
-              <th key={h} className="text-[#736d68] dark:text-[#868c97] font-semibold pb-2 px-1 w-12 text-center">
+              <th key={h} className="text-[#475569] dark:text-[#cbd5e1] font-bold pb-2 px-1 w-12 text-center">
                 {h}
               </th>
             ))}
@@ -536,14 +536,14 @@ function CohortHeatmap({
         <tbody>
           {rows.map((row) => (
             <tr key={row.cohortDate}>
-              <td className="text-[#55514e] dark:text-[#b6bbc5] font-medium pr-3 py-0.5 whitespace-nowrap">
+              <td className="text-[#0f172a] dark:text-[#ffffff] font-semibold pr-3 py-0.5 whitespace-nowrap">
                 {row.cohortLabel}
               </td>
-              <td className="text-center text-[#736d68] dark:text-[#868c97] py-0.5 px-1">{row.cohortSize}</td>
+              <td className="text-center text-[#475569] dark:text-[#cbd5e1] font-medium py-0.5 px-1">{row.cohortSize}</td>
               {row.dn.map((pct, i) => (
                 <td key={i} className="py-0.5 px-0.5">
                   {pct === null ? (
-                    <div className="h-7 rounded-[6px] flex items-center justify-center bg-[#f8f8f7] dark:bg-white/[0.03] text-[#bdb6ad] dark:text-[#736d68]">
+                    <div className="h-7 rounded-[6px] flex items-center justify-center bg-[#f8f8f7] dark:bg-white/[0.03] text-[#64748b] dark:text-[#94a3b8]">
                       —
                     </div>
                   ) : (
@@ -815,17 +815,17 @@ export default function DashboardPage() {
                     <div key={ch.title}>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          <span className="w-5 h-5 rounded-md bg-[#f1f1ef] dark:bg-white/10 text-[#334155] dark:text-[#f8fafc] text-[10px] font-bold flex items-center justify-center shrink-0">
                             {i + 1}
                           </span>
-                          <span className="text-sm font-semibold text-slate-800 truncate">{ch.title}</span>
-                          <span className="text-xs text-slate-400 shrink-0 hidden sm:block bg-slate-100 px-1.5 py-0.5 rounded font-medium">{ch.subject}</span>
+                          <span className="text-sm font-bold text-[#0f172a] dark:text-[#ffffff] truncate">{ch.title}</span>
+                          <span className="text-xs text-[#475569] dark:text-[#cbd5e1] shrink-0 hidden sm:block bg-[#f1f1ef] dark:bg-white/10 px-1.5 py-0.5 rounded font-medium">{ch.subject}</span>
                         </div>
-                        <span className="text-xs font-bold text-slate-700 shrink-0 ml-2 tabular-nums">
+                        <span className="text-xs font-bold text-[#334155] dark:text-[#cbd5e1] shrink-0 ml-2 tabular-nums">
                           {ch.count} {ch.count === 1 ? "question" : "questions"}
                         </span>
                       </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-[#f1f1ef] dark:bg-white/10 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                           style={{ width: `${pct}%` }}
@@ -848,30 +848,30 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3 mt-3">
-                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
+                  <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 p-4">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Flame size={13} className="text-amber-500" />
-                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Avg current streak</span>
+                      <Flame size={13} className="text-amber-600 dark:text-amber-400" />
+                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wide">Avg current streak</span>
                     </div>
-                    <p className="text-3xl font-bold text-amber-600 leading-none">
+                    <p className="text-3xl font-bold text-amber-700 dark:text-amber-400 leading-none">
                       {metrics?.avgStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
                     </p>
                   </div>
-                  <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
+                  <div className="rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/40 p-4">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Award size={13} className="text-indigo-500" />
-                      <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">All-time record</span>
+                      <Award size={13} className="text-sky-600 dark:text-sky-400" />
+                      <span className="text-xs font-bold text-sky-800 dark:text-sky-300 uppercase tracking-wide">All-time record</span>
                     </div>
-                    <p className="text-3xl font-bold text-indigo-600 leading-none">
+                    <p className="text-3xl font-bold text-sky-700 dark:text-sky-400 leading-none">
                       {metrics?.maxStreak ?? 0}<span className="text-base font-medium ml-1">days</span>
                     </p>
                   </div>
-                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
+                  <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 p-4">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <ArrowUpRight size={13} className="text-emerald-500" />
-                      <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">New signups this week</span>
+                      <ArrowUpRight size={13} className="text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">New signups this week</span>
                     </div>
-                    <p className="text-3xl font-bold text-emerald-600 leading-none">
+                    <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400 leading-none">
                       {signups?.newSignupsThisWeek ?? 0}
                     </p>
                   </div>
@@ -893,31 +893,31 @@ export default function DashboardPage() {
                   icon={UserMinus}
                   sub="Active on day 1 only — never returned on any subsequent day"
                 />
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800/40 shrink-0">
                   {retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}% Drop-off
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="mt-4 grid grid-cols-2 gap-3 p-3.5 bg-[#f8f8f7] dark:bg-white/[0.04] rounded-xl border border-[#ecebe8] dark:border-white/10">
                 <div>
-                  <p className="text-2xl font-bold text-slate-800">
+                  <p className="text-2xl font-bold text-[#0f172a] dark:text-[#ffffff]">
                     {retention?.neverReturnedAfterUsing?.neverReturnedCount ?? 0}
-                    <span className="text-xs font-normal text-slate-400 ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
+                    <span className="text-xs font-normal text-[#64748b] dark:text-[#94a3b8] ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
                   </p>
-                  <p className="text-xs text-rose-600 font-medium mt-0.5">Left after 1 day ({retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%)</p>
+                  <p className="text-xs text-rose-700 dark:text-rose-400 font-semibold mt-0.5">Left after 1 day ({retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%)</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-emerald-600">
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                     {retention?.neverReturnedAfterUsing?.returnedCount ?? 0}
-                    <span className="text-xs font-normal text-slate-400 ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
+                    <span className="text-xs font-normal text-[#64748b] dark:text-[#94a3b8] ml-1">/ {retention?.neverReturnedAfterUsing?.total ?? 0}</span>
                   </p>
-                  <p className="text-xs text-emerald-600 font-medium mt-0.5">Came back on Day 2+ ({retention?.neverReturnedAfterUsing?.returnedPct ?? 0}%)</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold mt-0.5">Came back on Day 2+ ({retention?.neverReturnedAfterUsing?.returnedPct ?? 0}%)</p>
                 </div>
               </div>
 
               {/* Progress bar visual */}
               <div className="mt-3">
-                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
+                <div className="h-2 w-full bg-[#f1f1ef] dark:bg-white/10 rounded-full overflow-hidden flex">
                   <div
                     className="bg-rose-500 transition-all duration-700"
                     style={{ width: `${retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%` }}
@@ -932,10 +932,10 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100">
+            <div className="mt-4 pt-3 border-t border-[#ecebe8] dark:border-white/10">
               <button
                 onClick={() => setShowProductDropoff(!showProductDropoff)}
-                className="w-full flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 transition py-1"
+                className="w-full flex items-center justify-between text-xs font-bold text-[#475569] dark:text-[#cbd5e1] hover:text-[#0f172a] dark:hover:text-[#ffffff] transition py-1"
               >
                 <span>{showProductDropoff ? "Hide" : "View"} drop-off student list</span>
                 {showProductDropoff ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -944,22 +944,22 @@ export default function DashboardPage() {
               {showProductDropoff && (
                 <div className="mt-3 divide-y divide-[#ecebe8] dark:divide-white/10 max-h-56 overflow-y-auto">
                   {(retention?.neverReturnedAfterUsing?.sampleUsers ?? []).length === 0 ? (
-                    <p className="text-xs text-slate-400 py-3 text-center">No drop-off students found</p>
+                    <p className="text-xs text-[#64748b] dark:text-[#94a3b8] py-3 text-center">No drop-off students found</p>
                   ) : (
                     (retention?.neverReturnedAfterUsing?.sampleUsers ?? []).map((u) => (
                       <div key={u.userId} className="py-2.5 flex items-center justify-between text-xs gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="amber" />
                           <div className="min-w-0">
-                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block">
+                            <Link href={`/users/${u.userId}`} className="font-bold text-[#0f172a] dark:text-[#ffffff] truncate hover:text-[#1F75FE] dark:hover:text-sky-300 block">
                               {u.name}
                             </Link>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
+                            <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] truncate">{u.email || "No email"}</p>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-[11px] font-medium text-slate-600 block">{u.questionsCount} Qs solved</span>
-                          <span className="text-[10px] text-slate-400">{u.onlyActiveDate}</span>
+                          <span className="text-[11px] font-semibold text-[#334155] dark:text-[#cbd5e1] block">{u.questionsCount} Qs solved</span>
+                          <span className="text-[10px] text-[#64748b] dark:text-[#94a3b8]">{u.onlyActiveDate}</span>
                         </div>
                       </div>
                     ))
@@ -978,29 +978,29 @@ export default function DashboardPage() {
                   icon={UserX}
                   sub="Signed up but had 0 activity, or bounced on signup day"
                 />
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800/40 shrink-0">
                   {retention?.neverReturnedAfterSignup?.neverReturnedPct ?? 0}% Drop-off
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2.5 p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-center">
+              <div className="mt-4 grid grid-cols-3 gap-2.5 p-3.5 bg-[#f8f8f7] dark:bg-white/[0.04] rounded-xl border border-[#ecebe8] dark:border-white/10 text-center">
                 <div>
-                  <p className="text-xl font-bold text-slate-800">{retention?.neverReturnedAfterSignup?.neverReturnedCount ?? 0}</p>
-                  <p className="text-[11px] text-rose-600 font-medium mt-0.5">Total left ({retention?.neverReturnedAfterSignup?.neverReturnedPct ?? 0}%)</p>
+                  <p className="text-xl font-bold text-[#0f172a] dark:text-[#ffffff]">{retention?.neverReturnedAfterSignup?.neverReturnedCount ?? 0}</p>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-400 font-semibold mt-0.5">Total left ({retention?.neverReturnedAfterSignup?.neverReturnedPct ?? 0}%)</p>
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-amber-600">{retention?.neverReturnedAfterSignup?.zeroActivityCount ?? 0}</p>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">0 Qs solved ({retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%)</p>
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{retention?.neverReturnedAfterSignup?.zeroActivityCount ?? 0}</p>
+                  <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] font-medium mt-0.5">0 Qs solved ({retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%)</p>
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-slate-700">{retention?.neverReturnedAfterSignup?.day1OnlyCount ?? 0}</p>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Day 1 bounce ({retention?.neverReturnedAfterSignup?.day1OnlyPct ?? 0}%)</p>
+                  <p className="text-xl font-bold text-[#334155] dark:text-[#cbd5e1]">{retention?.neverReturnedAfterSignup?.day1OnlyCount ?? 0}</p>
+                  <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] font-medium mt-0.5">Day 1 bounce ({retention?.neverReturnedAfterSignup?.day1OnlyPct ?? 0}%)</p>
                 </div>
               </div>
 
               {/* Progress bar visual */}
               <div className="mt-3">
-                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
+                <div className="h-2 w-full bg-[#f1f1ef] dark:bg-white/10 rounded-full overflow-hidden flex">
                   <div
                     className="bg-red-500 transition-all duration-700"
                     style={{ width: `${retention?.neverReturnedAfterSignup?.zeroActivityPct ?? 0}%` }}
@@ -1017,17 +1017,17 @@ export default function DashboardPage() {
                     title={`Returned: ${retention?.neverReturnedAfterSignup?.returnedPct ?? 0}%`}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                <div className="flex justify-between text-[10px] font-medium text-[#64748b] dark:text-[#94a3b8] mt-1">
                   <span>{retention?.neverReturnedAfterSignup?.zeroActivityCount ?? 0} ghost signups</span>
                   <span>{retention?.neverReturnedAfterSignup?.returnedCount ?? 0} retained accounts</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100">
+            <div className="mt-4 pt-3 border-t border-[#ecebe8] dark:border-white/10">
               <button
                 onClick={() => setShowSignupDropoff(!showSignupDropoff)}
-                className="w-full flex items-center justify-between text-xs font-semibold text-slate-600 hover:text-slate-900 transition py-1"
+                className="w-full flex items-center justify-between text-xs font-bold text-[#475569] dark:text-[#cbd5e1] hover:text-[#0f172a] dark:hover:text-[#ffffff] transition py-1"
               >
                 <span>{showSignupDropoff ? "Hide" : "View"} drop-off signup list</span>
                 {showSignupDropoff ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1036,24 +1036,24 @@ export default function DashboardPage() {
               {showSignupDropoff && (
                 <div className="mt-3 divide-y divide-[#ecebe8] dark:divide-white/10 max-h-56 overflow-y-auto">
                   {(retention?.neverReturnedAfterSignup?.sampleUsers ?? []).length === 0 ? (
-                    <p className="text-xs text-slate-400 py-3 text-center">No drop-off signups found</p>
+                    <p className="text-xs text-[#64748b] dark:text-[#94a3b8] py-3 text-center">No drop-off signups found</p>
                   ) : (
                     (retention?.neverReturnedAfterSignup?.sampleUsers ?? []).map((u) => (
                       <div key={u.userId} className="py-2.5 flex items-center justify-between text-xs gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
                           <div className="min-w-0">
-                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-800 truncate hover:text-indigo-600 hover:underline block">
+                            <Link href={`/users/${u.userId}`} className="font-bold text-[#0f172a] dark:text-[#ffffff] truncate hover:text-[#1F75FE] dark:hover:text-sky-300 block">
                               {u.name}
                             </Link>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email || "No email"}</p>
+                            <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] truncate">{u.email || "No email"}</p>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${u.activityType === "zero_activity" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+                          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${u.activityType === "zero_activity" ? "bg-red-50 text-red-700 dark:bg-rose-950/70 dark:text-rose-300" : "bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"}`}>
                             {u.activityType === "zero_activity" ? "Zero Activity" : "Day 1 Only"}
                           </span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5">{u.signupAt ? new Date(u.signupAt).toLocaleDateString("en-IN") : "—"}</span>
+                          <span className="text-[10px] text-[#64748b] dark:text-[#94a3b8] block mt-0.5">{u.signupAt ? new Date(u.signupAt).toLocaleDateString("en-IN") : "—"}</span>
                         </div>
                       </div>
                     ))
@@ -1078,12 +1078,12 @@ export default function DashboardPage() {
             {/* Interactive Switches: Interval and Free/Paid Segment */}
             <div className="flex flex-wrap items-center gap-2">
               {/* Interval Switch */}
-              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium">
+              <div className="inline-flex rounded-lg border border-[#ecebe8] dark:border-white/10 p-0.5 bg-[#f1f1ef] dark:bg-white/5 text-xs font-medium">
                 {(["daily", "weekly", "monthly"] as const).map((intv) => (
                   <button
                     key={intv}
                     onClick={() => handleIntervalChange(intv)}
-                    className={`px-3 py-1 rounded-md capitalize transition ${retentionInterval === intv ? "bg-white text-slate-900 font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                    className={`px-3 py-1 rounded-md capitalize transition ${retentionInterval === intv ? "bg-white dark:bg-[#181b20] text-[#0f172a] dark:text-[#ffffff] font-bold shadow-sm" : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#0f172a] dark:hover:text-[#ffffff]"}`}
                   >
                     {intv}
                   </button>
@@ -1091,12 +1091,12 @@ export default function DashboardPage() {
               </div>
 
               {/* Free vs Paid Segment Switch */}
-              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs font-medium">
+              <div className="inline-flex rounded-lg border border-[#ecebe8] dark:border-white/10 p-0.5 bg-[#f1f1ef] dark:bg-white/5 text-xs font-medium">
                 {(["all", "free", "paid"] as const).map((seg) => (
                   <button
                     key={seg}
                     onClick={() => handleSegmentChange(seg)}
-                    className={`px-3 py-1 rounded-md capitalize transition ${retentionSegment === seg ? "bg-emerald-600 text-white font-bold shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                    className={`px-3 py-1 rounded-md capitalize transition ${retentionSegment === seg ? "bg-emerald-600 text-white font-bold shadow-sm" : "text-[#64748b] dark:text-[#94a3b8] hover:text-[#0f172a] dark:hover:text-[#ffffff]"}`}
                   >
                     {seg === "all" ? "All Users" : seg === "free" ? "Free Users" : "Paid Users"}
                   </button>
@@ -1106,8 +1106,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Rolling average pill row */}
-          <div className="px-5 py-3 bg-slate-50/70 border-b border-[#ecebe8] dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="px-5 py-3 bg-[#f8f8f7] dark:bg-white/[0.03] border-b border-[#ecebe8] dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-bold text-[#475569] dark:text-[#cbd5e1] uppercase tracking-wide">
               Average Retention:
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1232,7 +1232,7 @@ export default function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-[#ecebe8] dark:border-white/10">
+                <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#475569] dark:text-[#cbd5e1] font-bold border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] tracking-wider">
                   <tr>
                     <th className="py-2.5 px-5">Student</th>
                     <th className="py-2.5 px-3">Status</th>
@@ -1244,33 +1244,33 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
                   {(metrics?.limitExceededUsers?.users ?? []).map((u) => (
-                    <tr key={u.userId} className="hover:bg-slate-50/80 transition">
+                    <tr key={u.userId} className="hover:bg-[#f8f8f7]/80 dark:hover:bg-white/[0.03] transition-colors">
                       <td className="py-3 px-5">
                         <div className="flex items-center gap-2.5">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                           <div className="min-w-0">
-                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-900 truncate hover:text-indigo-600 hover:underline block">
+                            <Link href={`/users/${u.userId}`} className="font-bold text-[#0f172a] dark:text-[#ffffff] truncate hover:text-[#1F75FE] dark:hover:text-sky-300 block">
                               {u.name}
                             </Link>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
+                            <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] truncate">{u.email || u.userId}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold text-[10px] ${u.isPaid ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] ${u.isPaid ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40" : "bg-[#f1f1ef] text-[#475569] dark:bg-white/10 dark:text-[#cbd5e1]"}`}>
                           {u.isPaid ? "Paid Pass" : "Free User"}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center font-bold text-slate-800 text-sm">
+                      <td className="py-3 px-3 text-center font-bold text-[#0f172a] dark:text-[#ffffff] text-sm">
                         {u.maxInSingleDay}
                       </td>
-                      <td className="py-3 px-3 text-center font-semibold text-slate-600">
+                      <td className="py-3 px-3 text-center font-semibold text-[#334155] dark:text-[#cbd5e1]">
                         {u.totalAnswered}
                       </td>
-                      <td className="py-3 px-3 text-center font-semibold text-indigo-600">
+                      <td className="py-3 px-3 text-center font-bold text-[#1F75FE] dark:text-sky-400">
                         {u.daysExceededCount} {u.daysExceededCount === 1 ? "day" : "days"}
                       </td>
-                      <td className="py-3 px-5 text-right text-slate-400">
+                      <td className="py-3 px-5 text-right text-[#64748b] dark:text-[#94a3b8]">
                         {u.lastExceededDate}
                       </td>
                     </tr>
@@ -1315,7 +1315,7 @@ export default function DashboardPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-[#ecebe8] dark:border-white/10">
+                <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#475569] dark:text-[#cbd5e1] font-bold border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] tracking-wider">
                   <tr>
                     <th className="py-2.5 px-5">Student</th>
                     <th className="py-2.5 px-3 text-center">Times Checkout Opened</th>
@@ -1326,33 +1326,33 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
                   {(metrics?.multipleCheckoutUsers?.users ?? []).map((u) => (
-                    <tr key={u.userId} className="hover:bg-slate-50/80 transition">
+                    <tr key={u.userId} className="hover:bg-[#f8f8f7]/80 dark:hover:bg-white/[0.03] transition-colors">
                       <td className="py-3 px-5">
                         <div className="flex items-center gap-2.5">
                           <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="indigo" />
                           <div className="min-w-0">
-                            <Link href={`/users/${u.userId}`} className="font-semibold text-slate-900 truncate hover:text-indigo-600 hover:underline block">
+                            <Link href={`/users/${u.userId}`} className="font-bold text-[#0f172a] dark:text-[#ffffff] truncate hover:text-[#1F75FE] dark:hover:text-sky-300 block">
                               {u.name}
                             </Link>
-                            <p className="text-[11px] text-slate-400 truncate">{u.email || u.userId}</p>
+                            <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] truncate">{u.email || u.userId}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className="inline-flex items-center gap-1 font-bold text-slate-800 text-sm bg-slate-100 px-2.5 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 font-bold text-[#0f172a] dark:text-[#ffffff] text-sm bg-[#f1f1ef] dark:bg-white/10 px-2.5 py-0.5 rounded-full">
                           {u.checkoutCount} times
                         </span>
                       </td>
                       <td className="py-3 px-3">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold text-[10px] ${u.status === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[10px] ${u.status === "paid" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40" : "bg-rose-50 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40"}`}>
                           {u.status === "paid" ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
                           {u.status === "paid" ? "Paid" : "Abandoned Checkout"}
                         </span>
                       </td>
-                      <td className="py-3 px-3 font-medium text-slate-600">
+                      <td className="py-3 px-3 font-semibold text-[#334155] dark:text-[#cbd5e1]">
                         {u.planId}
                       </td>
-                      <td className="py-3 px-5 text-right text-slate-400">
+                      <td className="py-3 px-5 text-right text-[#64748b] dark:text-[#94a3b8]">
                         {u.lastCheckoutAt ? timeAgo(u.lastCheckoutAt) : "—"}
                       </td>
                     </tr>
@@ -1390,24 +1390,24 @@ export default function DashboardPage() {
                   <Link
                     key={u.userId}
                     href={`/users/${u.userId}`}
-                    className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition group cursor-pointer"
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#f8f8f7] dark:hover:bg-white/[0.04] transition-colors group cursor-pointer"
                   >
-                    <span className="w-5 text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
+                    <span className="w-5 text-xs font-bold text-[#64748b] dark:text-[#94a3b8] shrink-0">{i + 1}</span>
                     <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="violet" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition">
+                      <p className="text-sm font-bold text-[#0f172a] dark:text-[#ffffff] truncate group-hover:text-[#1F75FE] dark:group-hover:text-sky-300 transition-colors">
                         {u.name}
                       </p>
-                      <p className="text-xs text-slate-400 truncate">{u.email}</p>
+                      <p className="text-xs text-[#64748b] dark:text-[#94a3b8] truncate">{u.email}</p>
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                       {Array.from({ length: 7 }).map((_, d) => (
                         <div
                           key={d}
-                          className={`w-2.5 h-2.5 rounded-sm ${d < u.activeDaysLast7 ? "bg-emerald-500" : "bg-slate-200"}`}
+                          className={`w-2.5 h-2.5 rounded-sm ${d < u.activeDaysLast7 ? "bg-emerald-500" : "bg-[#f1f1ef] dark:bg-white/10"}`}
                         />
                       ))}
-                      <span className="ml-1.5 text-xs font-semibold text-slate-500">{u.activeDaysLast7}/7</span>
+                      <span className="ml-1.5 text-xs font-semibold text-[#475569] dark:text-[#cbd5e1]">{u.activeDaysLast7}/7</span>
                     </div>
                   </Link>
                 ))}
@@ -1425,9 +1425,9 @@ export default function DashboardPage() {
                 {Array.from({ length: 4 }).map((_, i) => <div key={i} className="shimmer h-10 rounded" />)}
               </div>
             ) : (metrics?.recentUsers ?? []).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-10 text-[#64748b] dark:text-[#94a3b8]">
                 <Users size={28} strokeWidth={1.4} />
-                <p className="mt-2 text-sm">No recent activity</p>
+                <p className="mt-2 text-sm font-medium">No recent activity</p>
               </div>
             ) : (
               <div className="divide-y divide-[#ecebe8] dark:divide-white/10 max-h-[340px] overflow-y-auto">
@@ -1435,18 +1435,18 @@ export default function DashboardPage() {
                   <Link
                     key={u.userId}
                     href={`/users/${u.userId}`}
-                    className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition group cursor-pointer"
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#f8f8f7] dark:hover:bg-white/[0.04] transition-colors group cursor-pointer"
                   >
                     <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition">
+                      <p className="text-sm font-bold text-[#0f172a] dark:text-[#ffffff] truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                         {u.name}
                       </p>
-                      <p className="text-xs text-slate-400 truncate">{u.subject} — {u.chapter}</p>
+                      <p className="text-xs text-[#64748b] dark:text-[#94a3b8] truncate">{u.subject} — {u.chapter}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-xs text-slate-400">{timeAgo(u.lastSeen)}</span>
-                      <span className="text-xs text-slate-300 group-hover:text-emerald-600 transition">→</span>
+                      <span className="text-xs font-medium text-[#64748b] dark:text-[#94a3b8]">{timeAgo(u.lastSeen)}</span>
+                      <span className="text-xs text-[#94a3b8] dark:text-white/40 group-hover:text-emerald-600 transition-colors">→</span>
                     </div>
                   </Link>
                 ))}
@@ -1585,7 +1585,7 @@ export default function DashboardPage() {
                 {/* Desktop Table View (≥ sm) */}
                 <div className="hidden sm:block overflow-x-auto max-h-[540px] overflow-y-auto">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#736d68] dark:text-[#868c97] border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] sticky top-0 z-10 font-semibold tracking-wider">
+                    <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#475569] dark:text-[#cbd5e1] border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] sticky top-0 z-10 font-bold tracking-wider">
                       <tr>
                         <th className="py-2.5 px-5">Student</th>
                         <th className="py-2.5 px-3">Class &amp; Exam</th>
@@ -1604,34 +1604,34 @@ export default function DashboardPage() {
                             <Link href={`/users/${u.userId}`} className="flex items-center gap-2.5 group">
                               <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
                               <div className="min-w-0 max-w-[200px]">
-                                <p className="font-semibold text-[#2e2e2e] dark:text-[#f3f5fa] truncate group-hover:text-[#2a6fb5] dark:group-hover:text-sky-300 transition-colors">
+                                <p className="font-bold text-[#0f172a] dark:text-[#ffffff] truncate group-hover:text-[#1F75FE] dark:group-hover:text-sky-300 transition-colors">
                                   {u.name}
                                 </p>
-                                <p className="text-[11px] text-[#736d68] dark:text-[#868c97] truncate">{u.email || u.userId.slice(0, 8)}</p>
+                                <p className="text-[11px] text-[#64748b] dark:text-[#94a3b8] truncate">{u.email || u.userId.slice(0, 8)}</p>
                               </div>
                             </Link>
                           </td>
                           <td className="py-3 px-3">
-                            <span className="text-[#2e2e2e] dark:text-[#f3f5fa] font-medium">{u.class}</span>
-                            <span className="text-[11px] text-[#736d68] dark:text-[#868c97] block">{u.exam}</span>
+                            <span className="text-[#0f172a] dark:text-[#ffffff] font-semibold">{u.class}</span>
+                            <span className="text-[11px] text-[#64748b] dark:text-[#94a3b8] block">{u.exam}</span>
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <span className={`font-bold tabular-nums text-sm ${u.totalAttempts > 0 ? "text-[#2e2e2e] dark:text-[#f3f5fa]" : "text-[#bdb6ad] dark:text-[#736d68]"}`}>
+                            <span className={`font-bold tabular-nums text-sm ${u.totalAttempts > 0 ? "text-[#0f172a] dark:text-[#ffffff]" : "text-[#64748b] dark:text-[#94a3b8]"}`}>
                               {u.totalAttempts}
                             </span>
                           </td>
                           <td className="py-3 px-3">
                             {u.isPaid ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#dcf5e7] text-[#178a51] dark:bg-emerald-950/70 dark:text-emerald-300 border border-[#b6eacd] dark:border-emerald-800/40">
                                 <Crown size={10} className="text-[#fdba12] fill-[#fdba12]" />
                                 Paid Pass
                               </span>
                             ) : u.isNew ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-semibold text-[10px] bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-300">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-bold text-[10px] bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-300 border border-[#c9e5ff] dark:border-sky-800/40">
                                 New (&lt;24h)
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#55514e] dark:bg-white/10 dark:text-[#b6bbc5]">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] font-medium text-[10px] bg-[#f1f1ef] text-[#475569] dark:bg-white/10 dark:text-[#cbd5e1]">
                                 Free User
                               </span>
                             )}

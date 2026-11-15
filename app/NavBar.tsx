@@ -50,10 +50,10 @@ export function NavBar() {
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-[15px] tracking-tight text-[#2e2e2e] dark:text-[#f3f5fa]">
+                <span className="font-bold text-[15px] tracking-tight text-[#0f172a] dark:text-[#ffffff]">
                   Rookie
                 </span>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-[#e3f1ff] text-[#2a6fb5] dark:bg-sky-950/80 dark:text-sky-300">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/80 dark:text-sky-300">
                   Admin
                 </span>
               </div>
@@ -72,14 +72,14 @@ export function NavBar() {
                     className={[
                       "flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[13px] font-medium transition-colors select-none",
                       active
-                        ? "bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/70 dark:text-sky-200 font-semibold"
-                        : "text-[#736d68] hover:text-[#2e2e2e] hover:bg-[#f1f1ef] dark:text-[#868c97] dark:hover:text-[#f3f5fa] dark:hover:bg-white/5",
+                        ? "bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/80 dark:text-sky-200 font-semibold"
+                        : "text-[#475569] hover:text-[#0f172a] hover:bg-[#f1f1ef] dark:text-[#cbd5e1] dark:hover:text-[#ffffff] dark:hover:bg-white/5",
                     ].join(" ")}
                   >
                     <Icon
                       size={15}
                       strokeWidth={active ? 2.2 : 1.8}
-                      className={active ? "text-[#2a6fb5] dark:text-sky-400" : ""}
+                      className={active ? "text-[#1d4f86] dark:text-sky-400" : ""}
                     />
                     {label}
                   </Link>
@@ -91,7 +91,7 @@ export function NavBar() {
           {/* Right Action Slot */}
           <div className="flex items-center gap-2">
             {/* Live date indicator (Desktop) */}
-            <div className="hidden lg:block text-[12px] text-[#736d68] dark:text-[#868c97] mr-2">
+            <div className="hidden lg:block text-[12px] font-medium text-[#475569] dark:text-[#cbd5e1] mr-2">
               {new Date().toLocaleDateString("en-IN", {
                 weekday: "short",
                 day: "numeric",
@@ -105,12 +105,12 @@ export function NavBar() {
               onClick={toggle}
               aria-label={dark ? "Switch to light mode" : "Switch to Night owl dark mode"}
               title={dark ? "Switch to light mode" : "Switch to Night owl"}
-              className="size-9 rounded-[8px] flex items-center justify-center text-[#55514e] dark:text-[#b6bbc5] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors border border-transparent hover:border-[#ecebe8] dark:hover:border-white/10 outline-none focus-visible:ring-2 focus-visible:ring-dp-sky-500"
+              className="size-9 rounded-[8px] flex items-center justify-center text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors border border-transparent hover:border-[#ecebe8] dark:hover:border-white/10 outline-none focus-visible:ring-2 focus-visible:ring-dp-sky-500"
             >
               {mounted && dark ? (
                 <Sun size={17} className="text-[#ffd84d]" />
               ) : (
-                <Moon size={17} className="text-[#736d68]" />
+                <Moon size={17} className="text-[#475569]" />
               )}
             </button>
 
@@ -119,7 +119,7 @@ export function NavBar() {
               type="button"
               onClick={() => setMobileMenuOpen((o) => !o)}
               aria-label="Toggle navigation menu"
-              className="md:hidden size-9 rounded-[8px] flex items-center justify-center text-[#55514e] dark:text-[#b6bbc5] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors"
+              className="md:hidden size-9 rounded-[8px] flex items-center justify-center text-[#475569] dark:text-[#cbd5e1] hover:bg-[#f1f1ef] dark:hover:bg-white/10 transition-colors"
             >
               {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
             </button>
@@ -140,13 +140,13 @@ export function NavBar() {
                     "flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-[14px] font-medium transition-colors",
                     active
                       ? "bg-[#e3f1ff] text-[#1d4f86] dark:bg-sky-950/80 dark:text-sky-200 font-semibold"
-                      : "text-[#55514e] hover:bg-[#f1f1ef] dark:text-[#b6bbc5] dark:hover:bg-white/5",
+                      : "text-[#475569] hover:bg-[#f1f1ef] dark:text-[#cbd5e1] dark:hover:bg-white/5",
                   ].join(" ")}
                 >
                   <Icon
                     size={17}
                     strokeWidth={active ? 2.2 : 1.8}
-                    className={active ? "text-[#2a6fb5] dark:text-sky-400" : ""}
+                    className={active ? "text-[#1d4f86] dark:text-sky-400" : ""}
                   />
                   {label}
                 </Link>

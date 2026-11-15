@@ -1,4 +1,7 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
 @import "@fontsource/open-sauce-two/400.css";
 @import "@fontsource/open-sauce-two/500.css";
 @import "@fontsource/open-sauce-two/600.css";
@@ -11,12 +14,97 @@ html {
   font-size: 14px; /* Dropper 14px dashboard root: all rem-based typography scales together */
 }
 
+:root {
+  color-scheme: light;
+}
+
+.dark, [data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body {
   background-color: var(--dp-surface-canvas);
   color: var(--dp-text-primary);
   font-family: var(--dp-font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Universal Contrast Guardians ── */
+/* In Light Mode: text is crisp #0f172a, secondary is #334155, captions are #64748b */
+:root:not(.dark) {
+  --dp-text-primary: #0f172a;
+  --dp-text-secondary: #334155;
+  --dp-text-muted: #64748b;
+  --dp-surface-canvas: #f8f8f7;
+  --dp-surface-card: #ffffff;
+}
+
+/* In Dark Mode: pure white headings, soft silver secondary, clean slate captions */
+.dark, [data-theme="dark"] {
+  --dp-text-primary: #ffffff;
+  --dp-text-secondary: #e2e8f0;
+  --dp-text-muted: #94a3b8;
+  --dp-surface-canvas: #0f1115;
+  --dp-surface-card: #181b20;
+  --dp-surface-base: #14171c;
+  --dp-border-default: rgba(255, 255, 255, 0.1);
+}
+
+/* Slate & Gray class overrides in Dark Mode to prevent pitch-black text on dark background */
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-neutral-900,
+.dark .text-neutral-800 {
+  color: #f8fafc !important;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-neutral-700,
+.dark .text-neutral-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-400,
+.dark .text-gray-400,
+.dark .text-neutral-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-gray-50,
+.dark .bg-neutral-50 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.dark .bg-slate-100,
+.dark .bg-gray-100,
+.dark .bg-neutral-100 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .border-slate-200,
+.dark .border-slate-100,
+.dark .border-gray-200,
+.dark .border-gray-100 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Light Mode: boost washed-out slate-400 to legible 64748b */
+:root:not(.dark) .text-slate-400,
+:root:not(.dark) .text-gray-400 {
+  color: #64748b;
+}
+
+:root:not(.dark) .text-slate-500,
+:root:not(.dark) .text-gray-500 {
+  color: #475569;
 }
 
 /* ── Smooth transitions for theme toggle ── */

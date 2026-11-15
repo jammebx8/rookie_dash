@@ -257,13 +257,13 @@ export default function UserProfilePage({
       <div className="min-h-screen bg-[#f8f9fb] p-6 max-w-4xl mx-auto space-y-4">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#475569] hover:text-[#0f172a] dark:text-[#cbd5e1] dark:hover:text-white transition"
         >
           <ArrowLeft size={14} /> Back to Dashboard
         </Link>
-        <div className="p-8 bg-white rounded-xl border border-red-200 text-center">
-          <p className="text-base font-bold text-red-600">Student Not Found</p>
-          <p className="text-xs text-slate-400 mt-1">{data?.error || "User could not be loaded."}</p>
+        <div className="p-8 bg-white dark:bg-[#1b1e22] rounded-[16px] border border-red-200 dark:border-rose-900/40 text-center">
+          <p className="text-base font-bold text-red-600 dark:text-rose-400">Student Not Found</p>
+          <p className="text-xs text-[#64748b] dark:text-[#94a3b8] mt-1">{data?.error || "User could not be loaded."}</p>
         </div>
       </div>
     );
@@ -272,14 +272,14 @@ export default function UserProfilePage({
   const { profile, pass, kpis, recentAttempts, chapters, tests, orders } = data;
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7] dark:bg-[#121417] text-[#2e2e2e] dark:text-[#f3f5fa]">
+    <div className="min-h-screen bg-[#f8f8f7] dark:bg-[#0f1115] text-[#0f172a] dark:text-[#f8fafc]">
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-6">
 
         {/* ── Back Navigation ── */}
         <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-[#55514e] dark:text-[#b6bbc5] hover:text-[#2e2e2e] dark:hover:text-[#f3f5fa] bg-white dark:bg-[#1b1e22] border border-[#ecebe8] dark:border-white/10 px-3 py-1.5 rounded-[8px] shadow-sm transition hover:bg-[#f8f8f7] dark:hover:bg-white/5"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-[#475569] dark:text-[#cbd5e1] hover:text-[#0f172a] dark:hover:text-[#ffffff] bg-white dark:bg-[#1b1e22] border border-[#ecebe8] dark:border-white/10 px-3 py-1.5 rounded-[8px] shadow-sm transition hover:bg-[#f8f8f7] dark:hover:bg-white/5"
           >
             <ArrowLeft size={13} />
             Back to Dashboard
@@ -527,7 +527,7 @@ export default function UserProfilePage({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#475569] dark:text-[#cbd5e1] border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] font-bold tracking-wider">
                   <tr>
                     <th className="py-2.5 px-5">Chapter</th>
                     <th className="py-2.5 px-3">Subject</th>
@@ -537,15 +537,15 @@ export default function UserProfilePage({
                     <th className="py-2.5 px-5 text-right">Last Attempted</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[#ecebe8] dark:divide-white/10">
                   {chapters.map((ch) => (
-                    <tr key={ch.chapter} className="hover:bg-slate-50 transition">
-                      <td className="py-2.5 px-5 font-semibold text-slate-800">{ch.chapter}</td>
-                      <td className="py-2.5 px-3 text-slate-500 capitalize">{ch.subject}</td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-900">{ch.count}</td>
-                      <td className="py-2.5 px-3 text-center text-emerald-600 font-medium">{ch.correct}</td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-700">{ch.accuracy}%</td>
-                      <td className="py-2.5 px-5 text-right text-slate-400">{timeAgo(ch.lastAttempted)}</td>
+                    <tr key={ch.chapter} className="hover:bg-[#f8f8f7]/80 dark:hover:bg-white/[0.03] transition-colors">
+                      <td className="py-2.5 px-5 font-bold text-[#0f172a] dark:text-[#ffffff]">{ch.chapter}</td>
+                      <td className="py-2.5 px-3 text-[#475569] dark:text-[#cbd5e1] capitalize font-medium">{ch.subject}</td>
+                      <td className="py-2.5 px-3 text-center font-bold text-[#0f172a] dark:text-[#ffffff]">{ch.count}</td>
+                      <td className="py-2.5 px-3 text-center text-emerald-600 dark:text-emerald-400 font-semibold">{ch.correct}</td>
+                      <td className="py-2.5 px-3 text-center font-bold text-[#334155] dark:text-[#cbd5e1]">{ch.accuracy}%</td>
+                      <td className="py-2.5 px-5 text-right text-[#64748b] dark:text-[#94a3b8]">{timeAgo(ch.lastAttempted)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -556,22 +556,22 @@ export default function UserProfilePage({
 
         {/* ── Recent Attempts Stream (Append-Only Log) ── */}
         <section className={`${CARD} overflow-hidden`}>
-          <div className="px-5 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-5 pt-5 pb-3 border-b border-[#ecebe8] dark:border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock size={15} className="text-emerald-500" />
-              <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wide">
+              <h2 className="text-sm font-bold text-[#0f172a] dark:text-[#ffffff] uppercase tracking-wide">
                 Recent Question Attempts Stream ({recentAttempts.length})
               </h2>
             </div>
-            <span className="text-xs text-slate-400">Append-only live log</span>
+            <span className="text-xs text-[#64748b] dark:text-[#94a3b8] font-medium">Append-only live log</span>
           </div>
 
           {recentAttempts.length === 0 ? (
-            <p className="text-xs text-slate-400 py-8 text-center">No question attempts recorded</p>
+            <p className="text-xs text-[#64748b] dark:text-[#94a3b8] py-8 text-center font-medium">No question attempts recorded</p>
           ) : (
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 uppercase text-[10px] sticky top-0">
+                <thead className="bg-[#f8f8f7] dark:bg-[#16181c] text-[#475569] dark:text-[#cbd5e1] border-b border-[#ecebe8] dark:border-white/10 uppercase text-[10px] font-bold tracking-wider sticky top-0">
                   <tr>
                     <th className="py-2.5 px-5">Result</th>
                     <th className="py-2.5 px-3">Question ID</th>
@@ -677,21 +677,24 @@ export default function UserProfilePage({
 
         {/* ── Custom Sale Modal ── */}
         {showSaleModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] max-w-md w-full p-6 shadow-2xl border border-[#ecebe8] dark:border-white/10 space-y-4 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Zap size={18} className="text-indigo-600 fill-indigo-600" />
+                  <h3 className="text-base font-bold text-[#0f172a] dark:text-[#ffffff] flex items-center gap-2">
+                    <span className="p-1 rounded-[6px] bg-[#fff1f4] text-[#ff4f7b] dark:bg-rose-950/70 dark:text-rose-300">
+                      <Zap size={16} className="fill-current" />
+                    </span>
                     Put {profile.name} on Sale
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-[#64748b] dark:text-[#94a3b8] mt-1">
                     Sets a custom price and countdown timer for this student on Rookie.AI and in Razorpay checkout
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowSaleModal(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1"
+                  className="p-1 rounded-[6px] text-[#64748b] hover:bg-[#f1f1ef] dark:text-[#94a3b8] dark:hover:bg-white/10 transition"
                 >
                   ✕
                 </button>
@@ -699,11 +702,11 @@ export default function UserProfilePage({
 
               {/* Price field */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-[#0f172a] dark:text-[#ffffff] block mb-1">
                   Custom Discounted Price (₹)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748b] dark:text-[#94a3b8] font-bold text-sm">
                     ₹
                   </span>
                   <input
@@ -711,20 +714,20 @@ export default function UserProfilePage({
                     value={customPrice}
                     onChange={(e) => setCustomPrice(e.target.value)}
                     placeholder="399"
-                    className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-7 pr-3 py-2 rounded-[8px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-sm font-bold text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:ring-2 focus:ring-[#1F75FE]/30"
                   />
                 </div>
                 <div className="flex items-center gap-1.5 mt-2">
-                  <span className="text-[11px] text-slate-400">Presets:</span>
+                  <span className="text-[11px] font-medium text-[#64748b] dark:text-[#94a3b8]">Presets:</span>
                   {["199", "299", "399", "499"].map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setCustomPrice(p)}
-                      className={`text-[11px] px-2 py-0.5 rounded font-semibold border transition ${
+                      className={`text-[11px] px-2.5 py-1 rounded-[6px] font-bold border transition ${
                         customPrice === p
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                          ? "bg-[#1F75FE] text-white border-[#1F75FE] shadow-sm"
+                          : "bg-[#f8f8f7] dark:bg-white/5 text-[#334155] dark:text-[#cbd5e1] border-[#ecebe8] dark:border-white/10 hover:bg-[#f1f1ef]"
                       }`}
                     >
                       ₹{p}
@@ -735,7 +738,7 @@ export default function UserProfilePage({
 
               {/* Duration field */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-[#0f172a] dark:text-[#ffffff] block mb-1">
                   Sale Duration
                 </label>
                 <div className="grid grid-cols-4 gap-1.5 mb-2">
@@ -749,10 +752,10 @@ export default function UserProfilePage({
                       key={d.hours}
                       type="button"
                       onClick={() => setDurationHours(d.hours)}
-                      className={`text-[11px] p-2 rounded-lg font-semibold border text-center transition ${
+                      className={`text-[11px] p-2 rounded-[8px] font-bold border text-center transition ${
                         durationHours === d.hours
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                          ? "bg-[#1F75FE] text-white border-[#1F75FE] shadow-sm"
+                          : "bg-[#f8f8f7] dark:bg-white/5 text-[#334155] dark:text-[#cbd5e1] border-[#ecebe8] dark:border-white/10 hover:bg-[#f1f1ef]"
                       }`}
                     >
                       {d.label}
@@ -760,22 +763,22 @@ export default function UserProfilePage({
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Custom hours:</span>
+                  <span className="text-xs text-[#64748b] dark:text-[#94a3b8]">Custom hours:</span>
                   <input
                     type="number"
                     value={durationHours}
                     onChange={(e) => setDurationHours(e.target.value)}
-                    className="w-20 px-2 py-1 rounded border border-slate-200 text-xs font-medium"
+                    className="w-20 px-2 py-1 rounded-[6px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-xs font-medium text-[#0f172a] dark:text-[#ffffff]"
                     min="1"
                     max="720"
                   />
-                  <span className="text-xs text-slate-400">hours from now</span>
+                  <span className="text-xs text-[#64748b] dark:text-[#94a3b8]">hours from now</span>
                 </div>
               </div>
 
               {/* Reason / Note */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-[#0f172a] dark:text-[#ffffff] block mb-1">
                   Reason / Campaign Note
                 </label>
                 <input
@@ -783,13 +786,13 @@ export default function UserProfilePage({
                   value={customReason}
                   onChange={(e) => setCustomReason(e.target.value)}
                   placeholder="e.g. Abandoned checkout lead / Special discount"
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 rounded-[8px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:ring-2 focus:ring-[#1F75FE]/30"
                 />
               </div>
 
               {/* Admin Password */}
               <div className="pt-1">
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-[#0f172a] dark:text-[#ffffff] block mb-1">
                   Admin Password <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -797,15 +800,15 @@ export default function UserProfilePage({
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder="Enter admin password"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  className="w-full px-3 py-2 rounded-[8px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:ring-2 focus:ring-[#1F75FE]/30 font-mono"
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#ecebe8] dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowSaleModal(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  className="px-3.5 py-1.5 rounded-[8px] text-xs font-medium text-[#64748b] hover:bg-[#f1f1ef] dark:text-[#cbd5e1] dark:hover:bg-white/10 transition"
                 >
                   Cancel
                 </button>
@@ -813,7 +816,7 @@ export default function UserProfilePage({
                   type="button"
                   onClick={handleGrantCustomSale}
                   disabled={submittingSale || !adminPassword.trim()}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-[8px] bg-[#ff4f7b] hover:bg-[#e03d67] disabled:opacity-50 text-white text-xs font-bold shadow-sm transition flex items-center gap-1.5"
                 >
                   {submittingSale ? "Activating…" : `Activate ₹${customPrice} Sale`}
                 </button>
@@ -824,27 +827,27 @@ export default function UserProfilePage({
 
         {/* ── Cancel Custom Sale Modal ── */}
         {showCancelModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-200 space-y-3">
-              <h3 className="text-sm font-bold text-slate-900">Cancel Custom Sale</h3>
-              <p className="text-xs text-slate-500">
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] max-w-sm w-full p-5 shadow-2xl border border-[#ecebe8] dark:border-white/10 space-y-3">
+              <h3 className="text-sm font-bold text-[#0f172a] dark:text-[#ffffff]">Cancel Custom Sale</h3>
+              <p className="text-xs text-[#64748b] dark:text-[#94a3b8]">
                 Are you sure you want to cancel the custom discount for {profile.name}? Price will immediately revert to standard base price (₹999).
               </p>
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Admin Password</label>
+                <label className="text-xs font-semibold text-[#0f172a] dark:text-[#ffffff] block mb-1">Admin Password</label>
                 <input
                   type="password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder="Enter admin password"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono"
+                  className="w-full px-3 py-2 rounded-[8px] border border-[#ecebe8] dark:border-white/10 bg-[#f8f8f7] dark:bg-white/5 text-xs text-[#0f172a] dark:text-[#ffffff] font-mono"
                 />
               </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#ecebe8] dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowCancelModal(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  className="px-3 py-1.5 rounded-[8px] text-xs font-medium text-[#64748b] hover:bg-[#f1f1ef] dark:text-[#cbd5e1] dark:hover:bg-white/10 transition"
                 >
                   Keep Sale
                 </button>
@@ -852,7 +855,7 @@ export default function UserProfilePage({
                   type="button"
                   onClick={handleCancelCustomSale}
                   disabled={submittingSale || !adminPassword.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold"
+                  className="px-3.5 py-1.5 rounded-[8px] bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold transition"
                 >
                   {submittingSale ? "Cancelling…" : "Confirm Cancel"}
                 </button>

@@ -23,17 +23,20 @@ export default function RootLayout({
             __html: `
               try {
                 const t = localStorage.getItem('theme');
-                if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                const isDark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                if (isDark) {
                   document.documentElement.classList.add('dark');
+                  document.documentElement.setAttribute('data-theme', 'dark');
                 } else {
                   document.documentElement.classList.remove('dark');
+                  document.documentElement.setAttribute('data-theme', 'light');
                 }
               } catch (_) {}
             `,
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#f8f8f7] dark:bg-[#121417] text-[#2e2e2e] dark:text-[#f3f5fa] antialiased">
+      <body className="min-h-full flex flex-col bg-[#f8f8f7] dark:bg-[#0f1115] text-[#0f172a] dark:text-[#f8fafc] antialiased">
         <NavBar />
         <main className="flex-1 w-full">{children}</main>
       </body>

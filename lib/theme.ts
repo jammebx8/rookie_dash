@@ -25,6 +25,7 @@ export function useNightOwl() {
 
     const root = document.documentElement;
     root.classList.toggle("dark", initial);
+    root.setAttribute("data-theme", initial ? "dark" : "light");
     setDark(initial);
   }, []);
 
@@ -33,6 +34,7 @@ export function useNightOwl() {
       const next = !prev;
       const root = document.documentElement;
       root.classList.toggle("dark", next);
+      root.setAttribute("data-theme", next ? "dark" : "light");
       try {
         localStorage.setItem("theme", next ? "dark" : "light");
       } catch {}
