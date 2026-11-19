@@ -22,16 +22,24 @@ const FEATURES: {
   badge:   string;        // Tailwind classes for the badge chip
 }[] = [
   {
+    key:   "daily_practice",
+    label: "Daily Practice",
+    desc:  "Personalized 5-question daily habit set on Home",
+    bar:   "bg-amber-500",
+    dot:   "bg-amber-500",
+    badge: "bg-amber-50 text-amber-700 border-amber-100",
+  },
+  {
     key:   "question_viewer",
-    label: "Question Viewer",
-    desc:  "Chapter-mode questions (Practice → subject → chapter page)",
+    label: "Question Viewer (Unrestricted)",
+    desc:  "Unlimited AI solutions & questions across all JEE chapters",
     bar:   "bg-indigo-500",
     dot:   "bg-indigo-500",
     badge: "bg-indigo-50 text-indigo-700 border-indigo-100",
   },
   {
     key:   "similar",
-    label: "Similar Questions",
+    label: "Similar Questions (Free)",
     desc:  "Vector-matched questions shown below every Q in the viewer",
     bar:   "bg-sky-500",
     dot:   "bg-sky-500",
@@ -205,6 +213,71 @@ export default function FeaturesPage() {
             {data.error}
           </div>
         )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            IMPACT OVERVIEW — Free Question Viewer & Daily Practice
+            Monitors usage, feature uplift & habit formation
+        ══════════════════════════════════════════════════════════════════ */}
+        <div className={`${CARD} p-6 border-amber-200/60 bg-gradient-to-br from-amber-50/40 via-white to-indigo-50/20`}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                  New Policy Impact: Free Viewer &amp; Daily Practice
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tracks adoption of 5-question daily practice habit and post-unlock question viewer &amp; similar question usage
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200">
+              Retention &amp; Habit
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Daily Practice Users</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                {(data?.impact_metrics?.dailyPractice.started_users ?? 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                {(data?.impact_metrics?.dailyPractice.completed_users ?? 0).toLocaleString()} finished ({data?.impact_metrics?.dailyPractice.completion_rate ?? 0}%)
+              </p>
+            </div>
+
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Daily Habit Retention</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                {data?.impact_metrics?.retentionImpact.daily_practice_repeat_rate ?? 0}%
+              </p>
+              <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                {(data?.impact_metrics?.retentionImpact.repeat_daily_practice_users ?? 0).toLocaleString()} users back 2+ days
+              </p>
+            </div>
+
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">AI Solutions Viewed</p>
+              <p className="text-2xl font-bold text-indigo-700 mt-1 tabular-nums">
+                {(data?.impact_metrics?.questionViewer.solutions_viewed ?? 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-indigo-600 mt-1 font-medium">
+                100% free across all users
+              </p>
+            </div>
+
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Similar Qs Solved</p>
+              <p className="text-2xl font-bold text-sky-700 mt-1 tabular-nums">
+                {(data?.impact_metrics?.questionViewer.similar_attempted ?? 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-sky-600 mt-1 font-medium">
+                Unlocked concept reinforcement
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* ══════════════════════════════════════════════════════════════════
             SECTION 1 — Questions Attempted by Feature

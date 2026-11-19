@@ -60,6 +60,25 @@ interface ActivationData {
   threshold:        string;
 }
 
+export interface ImpactMetrics {
+  dailyPractice: {
+    started_users: number;
+    completed_users: number;
+    completion_rate: number;
+    total_answers: number;
+  };
+  questionViewer: {
+    unique_users: number;
+    total_answers: number;
+    solutions_viewed: number;
+    similar_attempted: number;
+  };
+  retentionImpact: {
+    repeat_daily_practice_users: number;
+    daily_practice_repeat_rate: number;
+  };
+}
+
 export interface FeaturesData {
   segment:               string;
   feature_counts:        FeatureCount[];
@@ -67,6 +86,7 @@ export interface FeaturesData {
   solution_stats:        SolutionStat[];
   test_funnel:           TestFunnel;
   activation:            ActivationData;
+  impact_metrics?:       ImpactMetrics;
   daily_events:          { date: string; label: string; count: number }[];
   top_chapters:          { chapter: string; subject: string; opens: number }[];
   error?:                string;
@@ -372,6 +392,59 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.opens - a.opens)
       .slice(0, 20);
 
+    // ── 8. Impact metrics (Daily Practice & Unrestricted Question Viewer) ──
+    const dpStartedStudents = new Set<string>();
+    const dpCompletedStudents = new Set<string>();
+    let dpTotalAnswers = 0;
+
+    const qvStudents = new Set<string>();
+    let qvTotalAnswers = 0;
+    let qvSolutionsViewed = 0;
+    let similarAttemptedCount = 0;
+
+    for (const e of allEvents) {
+      const evt = (e.event_name as string) ?? "";
+      const feat = (e.feature as string) ?? "";
+      const sid = (e.student_id as string) ?? "";
+
+      if (feat === "daily_practice") {
+        if (evt === "daily_practice_started" && sid) dpStartedStudents.add(sid);
+        if (evt === "daily_practice_completed" && sid) dpCompletedStudents.add(sid);
+        if (evt === "question_answered") dpTotalAnswers++;
+      }
+
+      if (feat === "question_viewer") {
+        if (sid) qvStudents.add(sid);
+        if (evt === "question_answered") qvTotalAnswers++;
+        if (evt === "solution_viewed") qvSolutionsViewed++;
+      }
+
+      if (feat === "similar" && (evt === "similar_attempted" || evt === "question_answered")) {
+        similarAttemptedCount++;
+      }
+    }
+
+    const dpRepeat = repeat_feature_usage.find(r => r.feature === "daily_practice");
+
+    const impact_metrics: ImpactMetrics = {
+      dailyPractice: {
+        started_users: dpStartedStudents.size,
+        completed_users: dpCompletedStudents.size,
+        completion_rate: dpStartedStudents.size > 0 ? Math.round((dpCompletedStudents.size / dpStartedStudents.size) * 100) : 0,
+        total_answers: dpTotalAnswers,
+      },
+      questionViewer: {
+        unique_users: qvStudents.size,
+        total_answers: qvTotalAnswers,
+        solutions_viewed: qvSolutionsViewed,
+        similar_attempted: similarAttemptedCount,
+      },
+      retentionImpact: {
+        repeat_daily_practice_users: dpRepeat?.repeatStudents ?? 0,
+        daily_practice_repeat_rate: dpRepeat?.repeatRate ?? 0,
+      },
+    };
+
     return Response.json({
       segment,
       feature_counts,
@@ -379,6 +452,7 @@ export async function GET(req: NextRequest) {
       solution_stats,
       test_funnel,
       activation,
+      impact_metrics,
       daily_events,
       top_chapters,
     } satisfies FeaturesData);
