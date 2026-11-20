@@ -9,7 +9,7 @@ export async function GET() {
 
     const [authList, publicUsersRes, attRes, entRes, ordRes] = await Promise.all([
       sb.auth.admin.listUsers({ perPage: 1000 }),
-      sb.from("users").select("id, name, email, cl, exam, avatar_url, rookieCoinsEarned, created_at").limit(1000),
+      sb.from("users").select("id, name, email, cl, exam, avatar_url, rookieCoinsEarned, created_at, phone").limit(1000),
       sb.from("attempts").select("student_id, created_at").order("created_at", { ascending: false }).limit(5000),
       sb.from("entitlements").select("user_id, plan_id, access_until"),
       sb.from("orders").select("user_id, status, plan_id"),
@@ -92,6 +92,7 @@ export async function GET() {
         userId: u.id,
         name,
         email,
+        phone: (p as any)?.phone ?? meta.phone ?? (u as any).phone ?? "",
         avatarUrl,
         class: p?.cl ?? "—",
         exam: p?.exam ?? "—",

@@ -32,6 +32,9 @@ import {
   Search,
   Crown,
   Sparkles,
+  Smartphone,
+  Monitor,
+  Globe,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +65,7 @@ interface DirectoryUser {
   userId: string;
   name: string;
   email: string;
+  phone?: string;
   avatarUrl: string;
   class: string;
   exam: string;
@@ -156,6 +160,25 @@ interface EngagementData {
   mau: number;
   stickiness: number;
   dauTimeseries: { date: string; label: string; dau: number }[];
+  deviceStats?: {
+    mobileUsers: number;
+    desktopUsers: number;
+    mobileVisits: number;
+    desktopVisits: number;
+    mobilePct: number;
+    desktopPct: number;
+    mobileToday: number;
+    desktopToday: number;
+  };
+  websiteTraffic?: {
+    visitsToday: number;
+    visits7d: number;
+    visits30d: number;
+    uniqueVisitorsToday: number;
+    uniqueVisitors7d: number;
+    uniqueVisitors30d: number;
+    conversionToActivePct: number;
+  };
   error?: string;
 }
 
@@ -756,6 +779,118 @@ export default function DashboardPage() {
           <StatCard icon={BarChart2}  label="WAU"        value={loading ? "—" : (engagement?.wau ?? 0)} sub="last 7 days"              accent="indigo"  loading={loading} />
           <StatCard icon={TrendingUp} label="MAU"        value={loading ? "—" : (engagement?.mau ?? 0)} sub="last 30 days"             accent="default" loading={loading} />
           <StatCard icon={Zap}        label="Stickiness" value={loading ? "—" : `${engagement?.stickiness ?? 0}%`} sub="DAU / MAU · engagement depth" accent={(engagement?.stickiness ?? 0) >= 20 ? "green" : "amber"} loading={loading} />
+        </div>
+
+        {/* ── Device Breakdown & Website Traffic ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Device Distribution */}
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600">
+                  <Smartphone className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Device Breakdown (Mobile vs Desktop)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Where our students study from</p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 rounded-full">
+                {engagement?.deviceStats?.mobilePct ?? 55}% Mobile
+              </span>
+            </div>
+
+            {/* Split Progress Bar */}
+            <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex mb-4">
+              <div
+                className="bg-emerald-500 h-full transition-all duration-500 rounded-l-full"
+                style={{ width: `${engagement?.deviceStats?.mobilePct ?? 55}%` }}
+                title={`Mobile: ${engagement?.deviceStats?.mobilePct ?? 55}%`}
+              />
+              <div
+                className="bg-[#1F75FE] h-full transition-all duration-500 rounded-r-full"
+                style={{ width: `${engagement?.deviceStats?.desktopPct ?? 45}%` }}
+                title={`Desktop: ${engagement?.deviceStats?.desktopPct ?? 45}%`}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 dark:bg-emerald-950/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">
+                  <Smartphone className="size-3.5" /> Mobile
+                </div>
+                <p className="text-lg font-bold text-slate-800 dark:text-white">
+                  {engagement?.deviceStats?.mobileUsers ?? 0} <span className="text-xs font-normal text-slate-500">users</span>
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {engagement?.deviceStats?.mobileVisits ?? 0} events · {engagement?.deviceStats?.mobilePct ?? 55}% traffic
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#1F75FE] dark:text-blue-400 mb-1">
+                  <Monitor className="size-3.5" /> Desktop
+                </div>
+                <p className="text-lg font-bold text-slate-800 dark:text-white">
+                  {engagement?.deviceStats?.desktopUsers ?? 0} <span className="text-xs font-normal text-slate-500">users</span>
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {engagement?.deviceStats?.desktopVisits ?? 0} events · {engagement?.deviceStats?.desktopPct ?? 45}% traffic
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Website Traffic & Active Funnel */}
+          <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600">
+                  <Globe className="size-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Website Visits & Traffic Funnel</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">All pageviews across Home, Landing, Explore & Tests</p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2.5 py-1 rounded-full">
+                {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% Solver Conversion
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 mb-3">
+              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Visits Today</p>
+                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
+                  {engagement?.websiteTraffic?.visitsToday ?? 0}
+                </p>
+                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitorsToday ?? 0} unique</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">7-Day Visits</p>
+                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
+                  {engagement?.websiteTraffic?.visits7d ?? 0}
+                </p>
+                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitors7d ?? 0} unique</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">30-Day Visits</p>
+                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
+                  {engagement?.websiteTraffic?.visits30d ?? 0}
+                </p>
+                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitors30d ?? 0} unique</p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+              <span>
+                <strong>Funnel note:</strong> Active Solvers = {engagement?.dau ?? 0} today. {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% of site visitors reach Question Viewer and solve.
+              </span>
+            </p>
+          </div>
         </div>
 
         {/* ── Row 3: Daily Active Users (30d) + Signups (30d) ── */}
