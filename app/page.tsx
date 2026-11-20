@@ -178,6 +178,9 @@ interface EngagementData {
     uniqueVisitors7d: number;
     uniqueVisitors30d: number;
     conversionToActivePct: number;
+    visitorsListToday: { userId: string; name: string; email: string; avatarUrl: string }[];
+    visitorsList7d:    { userId: string; name: string; email: string; avatarUrl: string }[];
+    visitorsList30d:   { userId: string; name: string; email: string; avatarUrl: string }[];
   };
   error?: string;
 }
@@ -416,6 +419,106 @@ function UserAvatar({
   return (
     <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${gMap[gradient]} flex items-center justify-center shrink-0`}>
       <span className="text-white text-[11px] font-bold">{initials}</span>
+    </div>
+  );
+}
+
+function TrafficPeriodTiles({
+  periods,
+  loading,
+}: {
+  periods: {
+    label:    string;
+    unique:   number;
+    sessions: number;
+    list:     { userId: string; name: string; email: string; avatarUrl: string }[];
+    key:      "today" | "7d" | "30d";
+  }[];
+  loading: boolean;
+}) {
+  const [expanded, setExpanded] = useState<"today" | "7d" | "30d" | null>(null);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-3 gap-2.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3 h-20 shimmer" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Tiles row */}
+      <div className="grid grid-cols-3 gap-2.5">
+        {periods.map((p) => {
+          const isOpen = expanded === p.key;
+          return (
+            <button
+              key={p.key}
+              onClick={() => setExpanded(isOpen ? null : p.key)}
+              className={`text-left rounded-xl border p-3 transition-all ${
+                isOpen
+                  ? "border-sky-300 dark:border-sky-700 bg-sky-50/80 dark:bg-sky-950/30 ring-1 ring-sky-200 dark:ring-sky-800/50"
+                  : "border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 hover:border-sky-200 dark:hover:border-sky-800/40 hover:bg-sky-50/40 dark:hover:bg-sky-950/10"
+              }`}
+            >
+              {/* Unique visitors — the headline */}
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-none">{p.label}</p>
+              <p className="text-xl font-black text-slate-900 dark:text-white mt-1.5 tabular-nums leading-none">
+                {p.unique.toLocaleString()}
+              </p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">unique visitors</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                {p.sessions.toLocaleString()} sessions
+              </p>
+              <p className={`text-[10px] font-medium mt-1.5 flex items-center gap-1 ${isOpen ? "text-sky-600 dark:text-sky-400" : "text-slate-400"}`}>
+                {p.list.length > 0
+                  ? <>{isOpen ? "▲" : "▼"} {p.list.length} known users</>
+                  : "no auth'd visitors yet"}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Expanded user list */}
+      {expanded && (() => {
+        const p = periods.find((x) => x.key === expanded)!;
+        return (
+          <div className="rounded-xl border border-sky-200 dark:border-sky-800/40 bg-sky-50/50 dark:bg-sky-950/20 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sky-100 dark:border-sky-800/30 flex items-center justify-between">
+              <span className="text-xs font-bold text-sky-700 dark:text-sky-300">
+                {p.label} — {p.unique} unique visitors ({p.list.length} identified)
+              </span>
+              <button
+                onClick={() => setExpanded(null)}
+                className="text-[11px] text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-200"
+              >
+                close ✕
+              </button>
+            </div>
+            {p.list.length === 0 ? (
+              <p className="px-4 py-4 text-xs text-slate-500 dark:text-slate-400">
+                No authenticated visitors tracked yet. Anonymous sessions (no login) show in the unique count but have no profile to display.
+              </p>
+            ) : (
+              <div className="max-h-56 overflow-y-auto divide-y divide-sky-100 dark:divide-sky-800/20">
+                {p.list.map((u) => (
+                  <div key={u.userId} className="flex items-center gap-3 px-4 py-2">
+                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} gradient="emerald" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{u.name}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{u.email}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -841,7 +944,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Website Traffic & Active Funnel */}
+          {/* Website Traffic — Unique Visitors */}
           <div className="bg-white dark:bg-[#1b1e22] rounded-[16px] border border-[#ecebe8] dark:border-white/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -849,45 +952,57 @@ export default function DashboardPage() {
                   <Globe className="size-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Website Visits & Traffic Funnel</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">All pageviews across Home, Landing, Explore & Tests</p>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Website Visits &amp; Unique Visitors</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">session_started events only — one per user per visit</p>
                 </div>
               </div>
               <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2.5 py-1 rounded-full">
-                {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% Solver Conversion
+                {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% → Solver
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5 mb-3">
-              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Visits Today</p>
-                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
-                  {engagement?.websiteTraffic?.visitsToday ?? 0}
-                </p>
-                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitorsToday ?? 0} unique</p>
-              </div>
+            {/* Three period tiles — unique visitors are the headline number */}
+            {(() => {
+              const periods: {
+                label: string;
+                unique: number;
+                sessions: number;
+                list: { userId: string; name: string; email: string; avatarUrl: string }[];
+                key: "today" | "7d" | "30d";
+              }[] = [
+                {
+                  label:    "Today",
+                  unique:   engagement?.websiteTraffic?.uniqueVisitorsToday ?? 0,
+                  sessions: engagement?.websiteTraffic?.visitsToday ?? 0,
+                  list:     engagement?.websiteTraffic?.visitorsListToday ?? [],
+                  key:      "today",
+                },
+                {
+                  label:    "Last 7 days",
+                  unique:   engagement?.websiteTraffic?.uniqueVisitors7d ?? 0,
+                  sessions: engagement?.websiteTraffic?.visits7d ?? 0,
+                  list:     engagement?.websiteTraffic?.visitorsList7d ?? [],
+                  key:      "7d",
+                },
+                {
+                  label:    "Last 30 days",
+                  unique:   engagement?.websiteTraffic?.uniqueVisitors30d ?? 0,
+                  sessions: engagement?.websiteTraffic?.visits30d ?? 0,
+                  list:     engagement?.websiteTraffic?.visitorsList30d ?? [],
+                  key:      "30d",
+                },
+              ];
 
-              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">7-Day Visits</p>
-                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
-                  {engagement?.websiteTraffic?.visits7d ?? 0}
-                </p>
-                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitors7d ?? 0} unique</p>
-              </div>
+              return (
+                <TrafficPeriodTiles periods={periods} loading={loading} />
+              );
+            })()}
 
-              <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/70 dark:bg-white/5 p-3">
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">30-Day Visits</p>
-                <p className="text-base font-bold text-slate-800 dark:text-white mt-0.5">
-                  {engagement?.websiteTraffic?.visits30d ?? 0}
-                </p>
-                <p className="text-[10px] text-slate-400">{engagement?.websiteTraffic?.uniqueVisitors30d ?? 0} unique</p>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-3">
               <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
               <span>
-                <strong>Funnel note:</strong> Active Solvers = {engagement?.dau ?? 0} today. {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% of site visitors reach Question Viewer and solve.
+                Active Solvers today: <strong>{engagement?.dau ?? 0}</strong> —{" "}
+                {engagement?.websiteTraffic?.conversionToActivePct ?? 0}% of unique visitors solved at least one question.
               </span>
             </p>
           </div>

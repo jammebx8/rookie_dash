@@ -10,6 +10,7 @@
  * Stickiness = DAU / MAU
  */
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { getUserProfiles } from "@/lib/getUserProfiles";
 
 export const dynamic = "force-dynamic";
 
@@ -129,8 +130,15 @@ export async function GET() {
       const dev = meta.device === "mobile" ? "mobile" : meta.device === "desktop" ? "desktop" : "desktop";
       const identifier = (row.student_id as string) || (row.session_id as string) || String(Math.random());
 
-      // Count website visits (either explicit website_visit or any page/session event)
-      if (row.event_name === "website_visit" || row.event_name === "session_started" || !row.event_name.startsWith("test_")) {
+      // A "visit" = session_started or website_visit only.
+      // We deliberately exclude question_answered, solution_viewed etc.
+      // so the count means "opened the site" not "did anything".
+      const isVisitEvent =
+        row.event_name === "session_started" ||
+        row.event_name === "website_visit" ||
+        row.event_name === "page_view";
+
+      if (isVisitEvent) {
         if (isToday) {
           websiteVisitsToday++;
           uniqueVisitorSessionsToday.add(identifier);
@@ -175,14 +183,62 @@ export async function GET() {
     const uniqueVisToday = uniqueVisitorSessionsToday.size;
     const conversionToActivePct = uniqueVisToday > 0 ? Math.min(100, Math.round((dau / uniqueVisToday) * 100)) : 0;
 
+    // ── Enrich unique visitor IDs with profiles ───────────────────────────────
+    // Collect the student_id (not session_id) for visit events to get real users
+    const visitorStudentIdsToday = new Set<string>();
+    const visitorStudentIds7d    = new Set<string>();
+    const visitorStudentIds30d   = new Set<string>();
+
+    analyticsRows.forEach((row) => {
+      const ts  = (row.ts as string) || "";
+      const day = ts.slice(0, 10);
+      const sid = row.student_id as string | null;
+      if (!sid) return; // anonymous sessions have no profile to show
+      const isVisitEvent =
+        row.event_name === "session_started" ||
+        row.event_name === "website_visit"   ||
+        row.event_name === "page_view";
+      if (!isVisitEvent) return;
+      const isToday = day === todayStr;
+      const is7d    = day >= sevenDaysStr;
+      const is30d   = day >= thirtyDaysStr;
+      if (is30d)   visitorStudentIds30d.add(sid);
+      if (is7d)    visitorStudentIds7d.add(sid);
+      if (isToday) visitorStudentIdsToday.add(sid);
+    });
+
+    // Fetch profiles for all unique known visitors (capped to avoid huge admin calls)
+    const allVisitorIds = [...new Set([
+      ...visitorStudentIdsToday,
+      ...visitorStudentIds7d,
+      ...visitorStudentIds30d,
+    ])].slice(0, 500);
+
+    const visitorProfiles = await getUserProfiles(allVisitorIds);
+
+    const toUserList = (ids: Set<string>) =>
+      [...ids].slice(0, 100).map((uid) => {
+        const p = visitorProfiles.get(uid);
+        return {
+          userId:    uid,
+          name:      p?.name      ?? uid.slice(0, 8),
+          email:     p?.email     ?? "",
+          avatarUrl: p?.avatarUrl ?? "",
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+
     const websiteTraffic = {
-      visitsToday: websiteVisitsToday,
-      visits7d: websiteVisits7d,
-      visits30d: websiteVisits30d,
+      visitsToday:         websiteVisitsToday,
+      visits7d:            websiteVisits7d,
+      visits30d:           websiteVisits30d,
       uniqueVisitorsToday: uniqueVisToday,
-      uniqueVisitors7d: uniqueVisitorSessions7d.size,
-      uniqueVisitors30d: uniqueVisitorSessions30d.size,
+      uniqueVisitors7d:    uniqueVisitorSessions7d.size,
+      uniqueVisitors30d:   uniqueVisitorSessions30d.size,
       conversionToActivePct,
+      // Per-period authenticated unique visitor lists
+      visitorsListToday: toUserList(visitorStudentIdsToday),
+      visitorsList7d:    toUserList(visitorStudentIds7d),
+      visitorsList30d:   toUserList(visitorStudentIds30d),
     };
 
     // ── Per-day DAU timeseries (30 days) ──────────────────────────────────────
@@ -215,7 +271,7 @@ export async function GET() {
     return Response.json({
       dau: 0, wau: 0, mau: 0, stickiness: 0, dauTimeseries: [],
       deviceStats: { mobileUsers: 0, desktopUsers: 0, mobileVisits: 0, desktopVisits: 0, mobilePct: 50, desktopPct: 50, mobileToday: 0, desktopToday: 0 },
-      websiteTraffic: { visitsToday: 0, visits7d: 0, visits30d: 0, uniqueVisitorsToday: 0, uniqueVisitors7d: 0, uniqueVisitors30d: 0, conversionToActivePct: 0 },
+      websiteTraffic: { visitsToday: 0, visits7d: 0, visits30d: 0, uniqueVisitorsToday: 0, uniqueVisitors7d: 0, uniqueVisitors30d: 0, conversionToActivePct: 0, visitorsListToday: [], visitorsList7d: [], visitorsList30d: [] },
       error: String(err),
     }, { status: 200 });
   }

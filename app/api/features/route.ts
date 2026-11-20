@@ -77,6 +77,13 @@ export interface ImpactMetrics {
     repeat_daily_practice_users: number;
     daily_practice_repeat_rate: number;
   };
+  equationHints: {
+    total_uses: number;
+    unique_users: number;
+    repeat_users: number;
+    repeat_rate: number;
+    by_feature: { feature: string; count: number }[];
+  };
 }
 
 export interface FeaturesData {
@@ -426,6 +433,33 @@ export async function GET(req: NextRequest) {
 
     const dpRepeat = repeat_feature_usage.find(r => r.feature === "daily_practice");
 
+    // ── Equation hint usage ────────────────────────────────────────────────────
+    const hintUserDays = new Map<string, Set<string>>();   // uid → Set<day>
+    const hintByFeature = new Map<string, number>();       // feature → count
+    let hintTotalUses = 0;
+
+    for (const e of allEvents) {
+      if ((e.event_name as string) !== "equation_hint_used") continue;
+      const sid  = (e.student_id as string) ?? "";
+      const feat = (e.feature as string) ?? "unknown";
+      const ts   = (e.ts as string) ?? "";
+      if (sid) {
+        if (!hintUserDays.has(sid)) hintUserDays.set(sid, new Set());
+        hintUserDays.get(sid)!.add(ts.slice(0, 10));
+      }
+      hintByFeature.set(feat, (hintByFeature.get(feat) ?? 0) + 1);
+      hintTotalUses++;
+    }
+
+    const hintUniqueUsers  = hintUserDays.size;
+    const hintRepeatUsers  = [...hintUserDays.values()].filter(days => days.size > 1).length;
+    const hintRepeatRate   = hintUniqueUsers > 0
+      ? Math.round((hintRepeatUsers / hintUniqueUsers) * 100)
+      : 0;
+    const hintByFeatureArr = [...hintByFeature.entries()]
+      .map(([feature, count]) => ({ feature, count }))
+      .sort((a, b) => b.count - a.count);
+
     const impact_metrics: ImpactMetrics = {
       dailyPractice: {
         started_users: dpStartedStudents.size,
@@ -442,6 +476,13 @@ export async function GET(req: NextRequest) {
       retentionImpact: {
         repeat_daily_practice_users: dpRepeat?.repeatStudents ?? 0,
         daily_practice_repeat_rate: dpRepeat?.repeatRate ?? 0,
+      },
+      equationHints: {
+        total_uses:   hintTotalUses,
+        unique_users: hintUniqueUsers,
+        repeat_users: hintRepeatUsers,
+        repeat_rate:  hintRepeatRate,
+        by_feature:   hintByFeatureArr,
       },
     };
 

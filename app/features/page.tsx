@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   BookOpen, ClipboardList, Layers, RefreshCw, Target, Repeat,
+  TrendingUp, TrendingDown,
 } from "lucide-react";
 import type { FeaturesData } from "@/app/api/features/route";
 
@@ -112,9 +113,29 @@ function FunnelBar({ label, value, max, color }: {
   );
 }
 
+// ─── Retention summary (pulled from /api/retention for policy impact) ─────────
+interface RetentionSummary {
+  monthlyRetention: number;
+  repeatPlatformUsage?: {
+    totalUsers: number;
+    repeatUsersCount: number;
+    repeatRate: number;
+    distribution: { label: string; days: string | number; count: number; pct: number }[];
+  };
+  neverReturnedAfterUsing?: {
+    total: number;
+    neverReturnedCount: number;
+    neverReturnedPct: number;
+    returnedCount: number;
+    returnedPct: number;
+  };
+  error?: string;
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function FeaturesPage() {
   const [data,        setData]        = useState<FeaturesData | null>(null);
+  const [retention,   setRetention]   = useState<RetentionSummary | null>(null);
   const [segment,     setSegment]     = useState<"all" | "free" | "paid">("all");
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
@@ -124,8 +145,13 @@ export default function FeaturesPage() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch(`/api/features?segment=${targetSegment}`, { cache: "no-store" });
-      setData(await res.json());
+      const [featRes, retRes] = await Promise.all([
+        fetch(`/api/features?segment=${targetSegment}`, { cache: "no-store" }),
+        fetch(`/api/retention?segment=${targetSegment}`, { cache: "no-store" }),
+      ]);
+      const [featJson, retJson] = await Promise.all([featRes.json(), retRes.json()]);
+      setData(featJson);
+      setRetention(retJson);
       setLastRefresh(new Date());
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
@@ -136,10 +162,14 @@ export default function FeaturesPage() {
     async function init() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/features?segment=${segment}`, { cache: "no-store" });
-        const json = await res.json();
+        const [featRes, retRes] = await Promise.all([
+          fetch(`/api/features?segment=${segment}`, { cache: "no-store" }),
+          fetch(`/api/retention?segment=${segment}`, { cache: "no-store" }),
+        ]);
+        const [featJson, retJson] = await Promise.all([featRes.json(), retRes.json()]);
         if (!ignore) {
-          setData(json);
+          setData(featJson);
+          setRetention(retJson);
           setLastRefresh(new Date());
         }
       } catch (e) {
@@ -219,7 +249,7 @@ export default function FeaturesPage() {
             Monitors usage, feature uplift & habit formation
         ══════════════════════════════════════════════════════════════════ */}
         <div className={`${CARD} p-6 border-amber-200/60 bg-gradient-to-br from-amber-50/40 via-white to-indigo-50/20`}>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-5">
             <div>
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
@@ -228,7 +258,7 @@ export default function FeaturesPage() {
                 </h2>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Tracks adoption of 5-question daily practice habit and post-unlock question viewer &amp; similar question usage
+                Did making solutions free and adding daily practice improve overall platform retention?
               </p>
             </div>
             <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200">
@@ -236,11 +266,122 @@ export default function FeaturesPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+          {/* ── Row 1: Platform-wide retention signals ── */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+            Platform-wide retention (all features combined)
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+
+            {/* Monthly retention */}
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Monthly Retention</p>
+              {loading ? <div className="h-7 w-16 mt-1 shimmer rounded" /> : (
+                <p className={`text-2xl font-black mt-1 tabular-nums ${
+                  (retention?.monthlyRetention ?? 0) >= 30 ? "text-emerald-700" :
+                  (retention?.monthlyRetention ?? 0) >= 15 ? "text-amber-700" : "text-rose-700"
+                }`}>
+                  {retention?.monthlyRetention ?? 0}%
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 mt-1">users active last month → this month</p>
+            </div>
+
+            {/* Repeat usage rate */}
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Multi-day Users</p>
+              {loading ? <div className="h-7 w-16 mt-1 shimmer rounded" /> : (
+                <p className={`text-2xl font-black mt-1 tabular-nums ${
+                  (retention?.repeatPlatformUsage?.repeatRate ?? 0) >= 50 ? "text-emerald-700" :
+                  (retention?.repeatPlatformUsage?.repeatRate ?? 0) >= 25 ? "text-amber-700" : "text-rose-700"
+                }`}>
+                  {retention?.repeatPlatformUsage?.repeatRate ?? 0}%
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 mt-1">
+                {(retention?.repeatPlatformUsage?.repeatUsersCount ?? 0).toLocaleString()} of{" "}
+                {(retention?.repeatPlatformUsage?.totalUsers ?? 0).toLocaleString()} users on 2+ days
+              </p>
+            </div>
+
+            {/* 1-day bounce */}
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">1-Day Bounce</p>
+              {loading ? <div className="h-7 w-16 mt-1 shimmer rounded" /> : (() => {
+                const d1 = retention?.repeatPlatformUsage?.distribution?.find(d => d.days === 1);
+                const pct = d1?.pct ?? 0;
+                return (
+                  <p className={`text-2xl font-black mt-1 tabular-nums ${
+                    pct <= 40 ? "text-emerald-700" : pct <= 60 ? "text-amber-700" : "text-rose-700"
+                  }`}>
+                    {pct}%
+                  </p>
+                );
+              })()}
+              <p className="text-[11px] text-slate-400 mt-1">users who never came back after day 1</p>
+            </div>
+
+            {/* Never returned after product use */}
+            <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
+              <p className="text-xs font-medium text-slate-400">Churned After 1 Use</p>
+              {loading ? <div className="h-7 w-16 mt-1 shimmer rounded" /> : (
+                <p className={`text-2xl font-black mt-1 tabular-nums ${
+                  (retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0) <= 40 ? "text-emerald-700" :
+                  (retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0) <= 60 ? "text-amber-700" : "text-rose-700"
+                }`}>
+                  {retention?.neverReturnedAfterUsing?.neverReturnedPct ?? 0}%
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 mt-1">
+                {(retention?.neverReturnedAfterUsing?.neverReturnedCount ?? 0).toLocaleString()} of{" "}
+                {(retention?.neverReturnedAfterUsing?.total ?? 0).toLocaleString()} users never returned
+              </p>
+            </div>
+          </div>
+
+          {/* ── Repeat usage distribution bar ── */}
+          {!loading && (retention?.repeatPlatformUsage?.distribution ?? []).length > 0 && (() => {
+            const dist = retention!.repeatPlatformUsage!.distribution;
+            const colors = ["bg-rose-400", "bg-amber-400", "bg-yellow-400", "bg-emerald-400", "bg-emerald-600"];
+            return (
+              <div className="mb-5">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                  How many days do users come back? (all-time)
+                </p>
+                <div className="flex h-5 rounded-full overflow-hidden gap-[2px]">
+                  {dist.map((bucket, i) => (
+                    <div
+                      key={bucket.label}
+                      className={`${colors[i] ?? "bg-slate-300"} transition-all duration-700`}
+                      style={{ width: `${Math.max(bucket.pct, bucket.count > 0 ? 2 : 0)}%` }}
+                      title={`${bucket.label}: ${bucket.count.toLocaleString()} users (${bucket.pct}%)`}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                  {dist.map((bucket, i) => (
+                    <div key={bucket.label} className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${colors[i] ?? "bg-slate-300"}`} />
+                      <span className="text-[11px] text-slate-600">{bucket.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500">{bucket.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Divider ── */}
+          <div className="border-t border-amber-100 mb-5" />
+
+          {/* ── Row 2: Feature-specific usage ── */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+            Feature adoption (last 30 days)
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
               <p className="text-xs font-medium text-slate-400">Daily Practice Users</p>
               <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                {(data?.impact_metrics?.dailyPractice.started_users ?? 0).toLocaleString()}
+                {loading ? "—" : (data?.impact_metrics?.dailyPractice.started_users ?? 0).toLocaleString()}
               </p>
               <p className="text-[11px] text-amber-600 mt-1 font-medium">
                 {(data?.impact_metrics?.dailyPractice.completed_users ?? 0).toLocaleString()} finished ({data?.impact_metrics?.dailyPractice.completion_rate ?? 0}%)
@@ -248,35 +389,173 @@ export default function FeaturesPage() {
             </div>
 
             <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
-              <p className="text-xs font-medium text-slate-400">Daily Habit Retention</p>
+              <p className="text-xs font-medium text-slate-400">Daily Habit Repeat</p>
               <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                {data?.impact_metrics?.retentionImpact.daily_practice_repeat_rate ?? 0}%
+                {loading ? "—" : `${data?.impact_metrics?.retentionImpact.daily_practice_repeat_rate ?? 0}%`}
               </p>
               <p className="text-[11px] text-emerald-600 mt-1 font-medium">
-                {(data?.impact_metrics?.retentionImpact.repeat_daily_practice_users ?? 0).toLocaleString()} users back 2+ days
+                {(data?.impact_metrics?.retentionImpact.repeat_daily_practice_users ?? 0).toLocaleString()} back 2+ days
               </p>
             </div>
 
             <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
               <p className="text-xs font-medium text-slate-400">AI Solutions Viewed</p>
               <p className="text-2xl font-bold text-indigo-700 mt-1 tabular-nums">
-                {(data?.impact_metrics?.questionViewer.solutions_viewed ?? 0).toLocaleString()}
+                {loading ? "—" : (data?.impact_metrics?.questionViewer.solutions_viewed ?? 0).toLocaleString()}
               </p>
-              <p className="text-[11px] text-indigo-600 mt-1 font-medium">
-                100% free across all users
-              </p>
+              <p className="text-[11px] text-indigo-600 mt-1 font-medium">free for all users</p>
             </div>
 
             <div className="bg-white/80 rounded-xl p-4 border border-slate-200/80 shadow-xs">
               <p className="text-xs font-medium text-slate-400">Similar Qs Solved</p>
               <p className="text-2xl font-bold text-sky-700 mt-1 tabular-nums">
-                {(data?.impact_metrics?.questionViewer.similar_attempted ?? 0).toLocaleString()}
+                {loading ? "—" : (data?.impact_metrics?.questionViewer.similar_attempted ?? 0).toLocaleString()}
               </p>
-              <p className="text-[11px] text-sky-600 mt-1 font-medium">
-                Unlocked concept reinforcement
-              </p>
+              <p className="text-[11px] text-sky-600 mt-1 font-medium">concept reinforcement</p>
             </div>
           </div>
+
+          {/* ── Verdict ── */}
+          {!loading && retention && (() => {
+            const repeatRate = retention.repeatPlatformUsage?.repeatRate ?? 0;
+            const churnPct   = retention.neverReturnedAfterUsing?.neverReturnedPct ?? 0;
+            const monthly    = retention.monthlyRetention ?? 0;
+            const good = (repeatRate >= 40 ? 1 : 0) + (churnPct <= 55 ? 1 : 0) + (monthly >= 20 ? 1 : 0);
+            const verdictColor = good >= 2 ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                               : good === 1 ? "border-amber-200 bg-amber-50/60 text-amber-800"
+                               : "border-rose-200 bg-rose-50/60 text-rose-800";
+            const icon = good >= 2 ? <TrendingUp size={13} className="shrink-0" /> : <TrendingDown size={13} className="shrink-0" />;
+            const msg = good >= 2
+              ? `Retention looks healthy — ${repeatRate}% multi-day repeat, ${monthly}% monthly retention, ${100 - churnPct}% of users came back after their first session.`
+              : good === 1
+              ? `Mixed signals — ${repeatRate}% repeat rate and ${monthly}% monthly retention. ${churnPct}% of users never returned after their first session, worth investigating.`
+              : `Retention needs attention — only ${repeatRate}% repeat users, ${monthly}% monthly retention, and ${churnPct}% single-session churn.`;
+            return (
+              <div className={`flex items-start gap-2.5 mt-4 px-4 py-3 rounded-xl border text-xs font-medium ${verdictColor}`}>
+                {icon}
+                <span>{msg}</span>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            EQUATION HINTS — Step-hover popup usage
+        ══════════════════════════════════════════════════════════════════ */}
+        <div className={`${CARD} p-6`}>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Equation Step Hints
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400">
+                How many students hover on equations to get a 2-line step explanation · last 30 days
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 px-2.5 py-1 rounded-full">
+              equation_hint_used
+            </span>
+          </div>
+
+          {loading ? (
+            <Skeleton rows={2} />
+          ) : (data?.impact_metrics?.equationHints.total_uses ?? 0) === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+              <p className="text-sm font-medium">No hint usage recorded yet</p>
+              <p className="text-xs text-center max-w-xs leading-relaxed">
+                Students trigger this by hovering any equation in a solution. Data will appear here once someone uses the feature.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Top-line stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
+                  <p className="text-xs font-medium text-slate-500">Total Uses</p>
+                  <p className="text-2xl font-black text-violet-700 mt-1 tabular-nums">
+                    {(data?.impact_metrics?.equationHints.total_uses ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">hint requests fired</p>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                  <p className="text-xs font-medium text-slate-500">Unique Users</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1 tabular-nums">
+                    {(data?.impact_metrics?.equationHints.unique_users ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">distinct students</p>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                  <p className="text-xs font-medium text-slate-500">Repeat Users</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1 tabular-nums">
+                    {(data?.impact_metrics?.equationHints.repeat_users ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">used on 2+ days</p>
+                </div>
+
+                <div className={`rounded-xl p-4 border ${
+                  (data?.impact_metrics?.equationHints.repeat_rate ?? 0) >= 40
+                    ? "bg-emerald-50 border-emerald-100"
+                    : (data?.impact_metrics?.equationHints.repeat_rate ?? 0) >= 20
+                    ? "bg-amber-50 border-amber-100"
+                    : "bg-slate-50 border-slate-200"
+                }`}>
+                  <p className="text-xs font-medium text-slate-500">Repeat Rate</p>
+                  <p className={`text-2xl font-black mt-1 tabular-nums ${
+                    (data?.impact_metrics?.equationHints.repeat_rate ?? 0) >= 40
+                      ? "text-emerald-700"
+                      : (data?.impact_metrics?.equationHints.repeat_rate ?? 0) >= 20
+                      ? "text-amber-700"
+                      : "text-slate-700"
+                  }`}>
+                    {data?.impact_metrics?.equationHints.repeat_rate ?? 0}%
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">came back 2+ days</p>
+                </div>
+              </div>
+
+              {/* Per-feature breakdown */}
+              {(data?.impact_metrics?.equationHints.by_feature ?? []).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                    Hints by feature surface
+                  </p>
+                  <div className="space-y-2.5">
+                    {(data?.impact_metrics?.equationHints.by_feature ?? []).map((row) => {
+                      const max = data?.impact_metrics?.equationHints.by_feature?.[0]?.count ?? 1;
+                      const pct = max > 0 ? Math.round((row.count / max) * 100) : 0;
+                      const meta = FEATURES.find(f => f.key === row.feature);
+                      return (
+                        <div key={row.feature}>
+                          <div className="flex items-center justify-between mb-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              {meta && <span className={`w-2 h-2 rounded-full ${meta.dot}`} />}
+                              <span className="font-medium text-slate-700">
+                                {meta?.label ?? row.feature.replace(/_/g, " ")}
+                              </span>
+                            </div>
+                            <span className="font-bold text-slate-800 tabular-nums">
+                              {row.count.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${meta?.bar ?? "bg-violet-500"}`}
+                              style={{ width: `${Math.max(pct, row.count > 0 ? 2 : 0)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
